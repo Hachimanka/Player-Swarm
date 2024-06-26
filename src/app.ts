@@ -1,18 +1,24 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
-
-dotenv.config();
-
-/** Middlewares */
-import logger from './middlewares/logger'; // Import the logger
+import cors from 'cors';
+import helmet from 'helmet';
+import logger from './middlewares/logger';
 
 /** Controllers */
-import CheckupController from './controllers/checkup';
-import PlaceXchange from './controllers/placexchange';
+import CHECKUP_ROUTER from './routes/checkup';
+import PXCHANGE_ROUTER from './routes/pxchange';
+import VISTAR_ROUTER from './routes/vistar';
 
 /** Initializers */
+dotenv.config();
 const app: Application = express();
 const PORT = process.env.PORT || 3000;
+
+/** Use helmet to secure Express apps by setting various HTTP headers */
+app.use(helmet());
+
+/** Enable CORS with default options */
+app.use(cors());
 
 /** Routes */
 app.use(express.json());
@@ -31,13 +37,19 @@ app.use((req: Request, res: Response, next: NextFunction) => {
  * Route serving checkup controller.
  * @name /api/checkup
  */
-app.use('/api/checkup', CheckupController);
+app.use('/api/checkup', CHECKUP_ROUTER);
 
 /**
  * Route serving place exchange controller.
  * @name /api/pxchange
  */
-app.use('/api/pxchange', PlaceXchange);
+app.use('/api/pxchange', PXCHANGE_ROUTER);
+
+/**
+ * Route serving vistar controller.
+ * @name /api/vistar
+ */
+app.use('/api/vistar', VISTAR_ROUTER);
 
 /**
  * Error handling middleware.
