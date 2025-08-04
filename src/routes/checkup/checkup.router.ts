@@ -1,32 +1,14 @@
-import { Router, Request, Response, NextFunction } from 'express';
-import logger from '../../middlewares/logger';
+import { Router } from 'express';
+import { CheckupController } from '@controllers/checkup';
 
-/** Services */
-import { CheckupService } from './checkup.service';
-
-/** Route initialization */
-const CHECKUP_ROUTER = Router();
+const router = Router();
+const checkupController = new CheckupController();
 
 /**
- * GET / - Handler for the root path of the CHECKUP_ROUTER.
- *
- * This route serves the checkup service.
- *
- * @function
- * @async
- * @param {Request} req - The Express request object.
- * @param {Response} res - The Express response object.
- * @param {NextFunction} next - The Express next middleware function.
- * @returns {Promise<void>}
+ * GET / - Health check endpoint
+ * @route GET /api/checkup
+ * @returns {Object} Health status information
  */
-CHECKUP_ROUTER.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const _checkup: CheckupService = new CheckupService();
-        _checkup.getCheckup(req, res);
-    } catch (err) {
-        logger.error(`CHECKUP_ROUTER Error: ${err}`);
-        next(err);
-    }
-});
+router.get('/', checkupController.getCheckup);
 
-export default CHECKUP_ROUTER;
+export default router;

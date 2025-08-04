@@ -1,33 +1,14 @@
-/** Global Imports and middlewares */
-import { Router, Request, Response, NextFunction } from 'express';
-import logger from '../../middlewares/logger';
+import { Router } from 'express';
+import { VistarController } from '@controllers/vistar';
 
-/** Services */
-import { VistarService } from './vistar.service';
-
-/** Route initialization  */
-const VISTAR_ROUTER = Router();
+const router = Router();
+const vistarController = new VistarController();
 
 /**
- * GET / - Handler for the root path of the VISTAR_ROUTER.
- *
- * This route serves the checkup service.
- *
- * @function
- * @async
- * @param {Request} req - The Express request object.
- * @param {Response} res - The Express response object.
- * @param {NextFunction} next - The Express next middleware function.
- * @returns {Promise<void>}
+ * GET / - Vistar service status endpoint
+ * @route GET /api/vistar
+ * @returns {Object} Vistar service status
  */
-VISTAR_ROUTER.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const _pxchange: VistarService = new VistarService();
-        await _pxchange.getCheckup(req, res);
-    } catch (err) {
-        logger.error(`VISTAR Error: ${err}`);
-        next(err);
-    }
-});
+router.get('/', vistarController.getStatus);
 
-export default VISTAR_ROUTER;
+export default router;

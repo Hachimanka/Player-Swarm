@@ -1,24 +1,24 @@
 import winston from 'winston';
 import 'winston-daily-rotate-file';
+
 const logDir = 'logs';
 
-/**
- * Creates a Winston logger instance with console and daily rotate file transports.
- * The logger logs messages to both the console and daily rotated files.
- * The log files are stored in the 'logs' directory, and each file is named with the date.
- * The log files are zipped after reaching a maximum size of 20MB and are retained for 14 days.
- *
- * @constant
- * @type {winston.Logger}
- */
 const logger = winston.createLogger({
-    level: 'info',
+    level: process.env.NODE_ENV === 'production' ? 'error' : 'debug',
     format: winston.format.combine(
         winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        winston.format.printf(({ timestamp, level, message }) => `${timestamp} ${level}: ${message}`),
+        winston.format.errors({ stack: true }),
+        winston.format.splat(),
+        winston.format.json(),
+        winston.format.printf(({ timestamp, level, message, ...meta }) => {
+            const metaString = Object.keys(meta).length ? JSON.stringify(meta) : '';
+            return `${timestamp} [${level}]: ${message} ${metaString}`;
+        }),
     ),
     transports: [
-        new winston.transports.Console(),
+        new winston.transports.Console({
+            format: winston.format.combine(winston.format.colorize(), winston.format.simple()),
+        }),
         new winston.transports.DailyRotateFile({
             dirname: logDir,
             filename: '%DATE%.log',
@@ -29,5 +29,11 @@ const logger = winston.createLogger({
         }),
     ],
 });
+
+(logger as any).stream = {
+    write: (message: string) => {
+        logger.info(message.trim());
+    },
+};
 
 export default logger;
