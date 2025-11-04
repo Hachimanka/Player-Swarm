@@ -4,7 +4,7 @@
     "description": "Enterprise Node.js REST API Server with TypeScript",
     "main": "dist/server.js",
     "scripts": {
-        "dev": "nodemon --config config/nodemon.json",
+        "dev": "NODE_ENV=development node --watch --require ts-node/register --require tsconfig-paths/register src/server.ts",
         "build": "rimraf dist && tsc",
         "start": "node -r module-alias/register dist/server.js",
         "start:prod": "NODE_ENV=production node -r module-alias/register dist/server.js",
@@ -34,10 +34,10 @@
         "express-rate-limit": "^7.4.0",
         "helmet": "^7.1.0",
         "joi": "^17.13.3",
+        "module-alias": "^2.2.3",
         "morgan": "^1.10.0",
         "winston": "^3.13.0",
-        "winston-daily-rotate-file": "^5.0.0",
-        "module-alias": "^2.2.3"
+        "winston-daily-rotate-file": "^5.0.0"
     },
     "devDependencies": {
         "@types/compression": "^1.7.5",
@@ -55,7 +55,6 @@
         "husky": "^9.1.4",
         "jest": "^29.7.0",
         "lint-staged": "^15.2.8",
-        "nodemon": "^3.1.4",
         "prettier": "^3.3.3",
         "rimraf": "^6.0.1",
         "supertest": "^7.0.0",
