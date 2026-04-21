@@ -37,7 +37,8 @@
         "module-alias": "^2.2.3",
         "morgan": "^1.10.0",
         "winston": "^3.13.0",
-        "winston-daily-rotate-file": "^5.0.0"
+        "winston-daily-rotate-file": "^5.0.0",
+        "zod": "^3.24.2"
     },
     "devDependencies": {
         "@types/compression": "^1.7.5",
@@ -81,6 +82,8 @@
         "@routes": "dist/routes",
         "@services": "dist/services",
         "@utils": "dist/utils",
-        "@types": "dist/types"
+        "@types": "dist/types",
+        "@interfaces": "dist/interfaces",
+        "@schemas": "dist/schemas"
     }
 }

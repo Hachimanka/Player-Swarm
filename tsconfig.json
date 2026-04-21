@@ -16,7 +16,9 @@
             "@routes/*": ["routes/*"],
             "@services/*": ["services/*"],
             "@utils/*": ["utils/*"],
-            "@types/*": ["types/*"]
+            "@types/*": ["types/*"],
+            "@interfaces/*": ["interfaces/*"],
+            "@schemas/*": ["schemas/*"]
         },
         "strict": true,
         "noImplicitAny": true,

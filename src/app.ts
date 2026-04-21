@@ -1,5 +1,4 @@
 import express, { Application } from 'express';
-import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -7,12 +6,11 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import errorHandlerMiddleware from '@middlewares/errorHandler';
 import logger from '@middlewares/logger';
+import path from 'node:path';
 
 import routes from '@routes/index';
 
-dotenv.config();
 const app: Application = express();
-const PORT = process.env.PORT || 3000;
 
 app.use(helmet());
 app.use(cors());
@@ -33,12 +31,16 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use(express.static(path.join(process.cwd(), 'public')));
+
+app.get('/health', (_req, res) => {
+    res.json({ ok: true });
+});
+
 // Use Routes
 app.use('/api', routes);
 
 // Error Handler
 app.use(errorHandlerMiddleware);
 
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+export default app;
