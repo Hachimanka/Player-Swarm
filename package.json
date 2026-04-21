@@ -15,7 +15,10 @@
         "lint:fix": "eslint --config config/eslint.config.js src/**/*.ts --fix",
         "format": "prettier --write src/**/*.ts",
         "validate": "npm run lint && npm run test",
-        "prepare": "husky install"
+        "pretty": "prettier --write \"./**/*.{html,js,jsx,mjs,cjs,ts,tsx,json,scss,css}\"",
+        "pretty:quick": "pretty-quick",
+        "pretty:staged": "pretty-quick --staged",
+        "pretty:check": "pretty-quick --check"
     },
     "keywords": [
         "nodejs",
