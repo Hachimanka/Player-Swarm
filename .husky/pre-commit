@@ -1,0 +1,9 @@
+#!/bin/sh
+
+echo "Running pre-commit hook..."
+
+# Run pretty-quick to format only staged files
+echo "✨ Formatting staged files with Prettier + organize imports..."
+npm run pretty:staged || { echo "❌ Formatting failed. Fix errors before committing."; exit 1; }
+
+echo "✅ Pre-commit checks passed!"
