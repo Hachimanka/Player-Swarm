@@ -15,7 +15,7 @@ Enterprise Node.js REST API Server built with TypeScript, Express.js, and modern
 
 ## 📋 Prerequisites
 
-- Node.js >= 20.0.0
+- Node.js >= 24.0.0 (current LTS)
 - npm >= 10.0.0
 
 ## 🛠 Installation
