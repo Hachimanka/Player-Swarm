@@ -55,3 +55,10 @@ Thumbs.db
 .vscode/settings.json
 junit.xml
 sshConfig.js
+
+# desktop (Electron) app build output
+/desktop/node_modules
+/desktop/out
+/desktop/dist
+/desktop/release
+/desktop/*.tsbuildinfo

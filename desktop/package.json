@@ -1,0 +1,55 @@
+{
+    "name": "@player-swarm/desktop",
+    "version": "0.1.0",
+    "description": "Desktop app that hosts many independent, isolated Chromium player instances in one window",
+    "author": "N-Compass TV",
+    "private": true,
+    "main": "./out/main/index.js",
+    "scripts": {
+        "dev": "electron-vite dev",
+        "build": "electron-vite build && electron-builder",
+        "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
+    },
+    "dependencies": {
+        "uuid": "^14.0.1"
+    },
+    "devDependencies": {
+        "@electron-toolkit/tsconfig": "^2.0.0",
+        "@types/node": "^24.13.3",
+        "electron": "^43.3.0",
+        "electron-builder": "^26.15.3",
+        "electron-vite": "^5.0.0",
+        "typescript": "^6.0.3",
+        "vite": "^7.3.6"
+    },
+    "engines": {
+        "node": ">=24.0.0"
+    },
+    "build": {
+        "appId": "biz.n-compass.player-swarm",
+        "productName": "Player Swarm",
+        "executableName": "player-swarm",
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "out/**/*"
+        ],
+        "linux": {
+            "target": [
+                "AppImage"
+            ],
+            "category": "Utility"
+        },
+        "mac": {
+            "target": [
+                "dmg"
+            ]
+        },
+        "win": {
+            "target": [
+                "nsis"
+            ]
+        }
+    }
+}
