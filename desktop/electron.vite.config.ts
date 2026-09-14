@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import angular from '@analogjs/vite-plugin-angular';
 
 export default defineConfig({
     main: {
@@ -25,6 +26,7 @@ export default defineConfig({
     },
     renderer: {
         root: resolve('src/renderer'),
+        plugins: [angular({ tsconfig: resolve('tsconfig.web.json') })],
         resolve: {
             alias: {
                 '@shared': resolve('src/shared'),

@@ -6,6 +6,8 @@
         "strict": true,
         "noImplicitAny": true,
         "noUncheckedIndexedAccess": true,
+        "experimentalDecorators": true,
+        "useDefineForClassFields": false,
         "paths": {
             "@shared/*": ["./src/shared/*"]
         }

@@ -1,10 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 * {
     box-sizing: border-box;
 }
 
 html,
 body,
-#app {
+app-root {
     margin: 0;
     height: 100%;
     width: 100%;
@@ -17,7 +21,7 @@ body,
     overflow: hidden;
 }
 
-#app {
+app-root {
     display: flex;
     flex-direction: column;
 }
@@ -25,25 +29,37 @@ body,
 .toolbar {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     padding: 8px 12px;
-    background: #2a2b2f;
+    background: #262b32;
     border-bottom: 1px solid #3a3b40;
     flex: 0 0 auto;
 }
 
-.toolbar__add-button {
-    background: #4f7bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 6px 12px;
-    cursor: pointer;
-    font-size: 14px;
+.toolbar__group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
 }
 
-.toolbar__add-button:hover {
-    background: #6489ff;
+.toolbar__divider {
+    width: 1px;
+    height: 22px;
+    background: #3a3b40;
+    flex: 0 0 auto;
+}
+
+/* Pushes Columns/Docker-repo (settings, not player-management actions) to
+   the far right, keeping them visually distinct from the action groups. */
+.toolbar__spacer {
+    flex: 1 1 auto;
+}
+
+.toolbar__page-label {
+    font-size: 12px;
+    color: #b3b3b3;
+    white-space: nowrap;
 }
 
 .toolbar__columns-label {
@@ -54,19 +70,188 @@ body,
     color: #b3b3b3;
 }
 
-.toolbar__columns-input {
-    width: 60px;
-    padding: 4px 6px;
-    background: #1e1f22;
-    border: 1px solid #3a3b40;
-    color: #e6e6e6;
+/* ntv-input's own native field is width:100% of this wrapper, so
+   constraining the wrapper is what actually narrows it - only applies to
+   the Columns field (the only ntv-input inside .toolbar__columns-label). */
+.toolbar__columns-label ntv-input {
+    width: 64px;
+}
+
+/* Per Page's own "Custom…" field - same width-via-wrapper trick as
+   Columns above, just not nested inside .toolbar__columns-label since it
+   replaces the Per Page button itself rather than sitting inside its label. */
+.toolbar-custom-pagesize-input {
+    width: 64px;
+}
+
+/* ntv-popover's own panel defaults to a white background with dark text
+   (Component Pantry's light-theme default) - our menu content below assumes
+   a dark panel to match this app's theme, so override the panel itself
+   rather than fight it with light-on-white text. */
+ntv-popover .ntv-popover {
+    background-color: #2a2b2f !important;
+    border-color: #3a3b40 !important;
+}
+
+ntv-popover .ntv-popover__content {
+    color: #e6e6e6 !important;
+}
+
+/* Component Pantry's "danger" button variant is a transparent outline by
+   default (its solid fill only appears on focus/active) - on our dark
+   toolbar/card-header backgrounds it reads as low-contrast dark-red text
+   with no real button surface. Give the Remove buttons a solid fill instead. */
+.btn--danger {
+    background-color: #e73535 !important;
+    border-color: #e73535 !important;
+    color: #fff !important;
+}
+
+.btn--danger:hover:not(:disabled):not(.btn--disabled) {
+    background-color: #c92c2c !important;
+    border-color: #c92c2c !important;
+    color: #fff !important;
+}
+
+.toolbar-menu {
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    min-width: 180px;
+}
+
+.toolbar-menu__item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: none;
+    border: none;
     border-radius: 4px;
+    color: #e6e6e6;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.toolbar-menu__item:hover {
+    background: #3a3b40;
+}
+
+.toolbar-menu__badge {
+    background: rgba(242, 73, 92, 0.2);
+    color: #f2495c;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+    line-height: 1.5;
+}
+
+.toolbar-pagination {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.toolbar-page-btn {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid #3a3b40;
+    background: none;
+    color: #b3b3b3;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.toolbar-page-btn:hover:not(:disabled) {
+    background: #2a2b2f;
+    color: #e6e6e6;
+}
+
+.toolbar-page-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.toolbar-settings-trigger {
+    position: relative;
+    display: flex;
+}
+
+.toolbar-gear-dot {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #2fd97b;
+    border: 2px solid #2a2b2f;
+    pointer-events: none;
+}
+
+.toolbar-gear-dot--off {
+    background: #5c6178;
 }
 
 .grid-mount {
+    position: relative;
     flex: 1 1 auto;
     min-height: 0;
     padding: 8px;
+}
+
+.grid-mount--drag-active {
+    outline: 2px dashed #6c8cff;
+    outline-offset: -8px;
+}
+
+/* Reserves a strip of real, measured layout space at the bottom that the
+   grid's own column/row math will never assign to a player (bounds come
+   from actual getBoundingClientRect() on each card, so shrinking the
+   available area here shrinks every player's computed bounds away from it
+   too) - the only way to keep a floating badge visible, since a
+   WebContentsView is a native layer stacked ABOVE the renderer and no
+   CSS position/z-index can win against one occupying the same spot. */
+.grid-mount--reserve-badge {
+    padding-bottom: 56px;
+}
+
+.drop-overlay {
+    position: absolute;
+    inset: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    background: rgba(30, 31, 34, 0.85);
+    color: #e6e6e6;
+    font-size: 14px;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Angular wraps <player-grid>/<player-card> around the styled divs below —
+   without an explicit block box + height here, the `height: 100%` on
+   .player-grid resolves against an auto-height parent (i.e. becomes `auto`),
+   collapsing every row to content size. */
+player-grid {
+    display: block;
+    height: 100%;
+    min-height: 0;
+}
+
+player-card {
+    display: block;
+    min-width: 0;
+    min-height: 0;
 }
 
 .player-grid {
@@ -76,25 +261,103 @@ body,
     height: 100%;
 }
 
+/* Focused-player layout: one large area + a vertical strip of live
+   thumbnails on the right for everyone else, so other players stay visibly
+   running instead of disappearing while one is maximized. */
+.player-focus-layout {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+    gap: 8px;
+}
+
+.player-focus-main {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.player-focus-main player-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+}
+
+.player-focus-strip {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 220px;
+    gap: 8px;
+    overflow-y: auto;
+}
+
+.player-focus-strip player-card {
+    flex: 0 0 140px;
+    width: 100%;
+}
+
 .player-card {
+    /* Lets .player-card__header's own rules below react to THIS card's own
+       rendered width via @container, independent of how many columns/pages
+       produced that width - one query instead of separately tracking
+       column count, page size, and the focused-strip's own fixed width in
+       JS. Named (not anonymous) so a future nested container elsewhere in
+       the app can't accidentally get matched by these rules instead. */
+    container-name: player-card;
+    container-type: inline-size;
+    position: relative;
     display: flex;
     flex-direction: column;
     background: #000;
     border: 1px solid #3a3b40;
     border-radius: 4px;
     overflow: hidden;
+    width: 100%;
+    height: 100%;
     min-width: 0;
     min-height: 0;
+    transition: border-color 0.15s ease;
+}
+
+.player-card:hover {
+    border-color: #5c8df6;
+}
+
+/* Thumbnail strip's hover uses green instead of the maximized card's blue,
+   so hovering a candidate-to-switch-to reads differently from "this is the
+   currently maximized one". */
+.player-focus-strip .player-card:hover {
+    border-color: #22c55e;
+}
+
+.player-card--focused {
+    border-color: #6c8cff;
 }
 
 .player-card__header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 4px 8px;
+    gap: 6px;
+    padding: 2px 6px;
     background: #2a2b2f;
     flex: 0 0 auto;
+}
+
+.player-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.player-card__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 0 1 auto;
+    max-width: 140px;
 }
 
 .player-card__label {
@@ -103,84 +366,373 @@ body,
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
 }
 
-.player-card__remove {
+.player-card__label-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    background: #1e1f22;
+    border: 1px solid #4f7bff;
+    border-radius: 3px;
+    color: #e6e6e6;
+    padding: 2px 4px;
+}
+
+.player-card__loading-dot {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #4f7bff;
+    animation: player-card-loading-pulse 1s ease-in-out infinite;
+}
+
+@keyframes player-card-loading-pulse {
+    0%,
+    100% {
+        opacity: 0.3;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+/* Compact per-player nav bar (Back/Forward/Reload/Stop/Mute/DevTools + editable URL) - nested inline inside .player-card__header rather than its own row, so it absorbs the header's remaining width. */
+.player-card__navbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.player-card__nav-btn {
+    flex: 0 0 auto;
     background: transparent;
     border: none;
     color: #b3b3b3;
-    cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1;
-    padding: 2px 6px;
+    padding: 3px 5px;
     border-radius: 3px;
+    cursor: pointer;
 }
 
-.player-card__remove:hover {
-    background: #e35555;
-    color: white;
+.player-card__nav-btn:hover:not(:disabled) {
+    background: #3a3b40;
+    color: #e6e6e6;
+}
+
+.player-card__nav-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.player-card__url-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 11px;
+    background: #1e1f22;
+    border: 1px solid #3a3b40;
+    border-radius: 3px;
+    color: #e6e6e6;
+    padding: 3px 6px;
+}
+
+/* Shrinks the header's own buttons (Maximize/Remove + the nav bar's
+   Back/Forward/Reload/Mute/DevTools icons) as a card's OWN rendered width
+   drops - i.e. as Columns/Per page pack more instances onto the screen.
+   Same controls throughout, just smaller - no menu/overflow button added.
+   .btn--xs here is ntv-button's own internal class (Maximize/Remove render
+   size="xs") - overridable directly since that library ships with
+   ViewEncapsulation.None (confirmed via its compiled bundle), so these are
+   plain global classes, not shadow-scoped. `.player-card__actions .btn--xs`
+   beats the library's own single-class `.btn--xs` rule on specificity
+   alone (2 classes > 1), no !important needed. */
+@container player-card (max-width: 200px) {
+    .player-card__header {
+        padding: 2px 4px;
+        gap: 4px;
+    }
+
+    .player-card__actions {
+        gap: 2px;
+    }
+
+    .player-card__actions .btn--xs {
+        height: 20px;
+        padding: 2px 4px;
+        font-size: 12px;
+    }
+
+    .player-card__nav-btn {
+        font-size: 10px;
+        padding: 2px 4px;
+    }
+}
+
+@container player-card (max-width: 120px) {
+    .player-card__header {
+        padding: 1px 3px;
+        gap: 2px;
+    }
+
+    .player-card__actions {
+        gap: 1px;
+    }
+
+    .player-card__actions .btn--xs {
+        height: 16px;
+        padding: 0 3px;
+        font-size: 10px;
+    }
+
+    .player-card__nav-btn {
+        font-size: 9px;
+        padding: 1px 2px;
+    }
+}
+
+.player-card__url-input:focus {
+    border-color: #4f7bff;
+    outline: none;
+}
+
+.player-card__error {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px;
+    text-align: center;
+    background: #1a1b1e;
+    color: #e6e6e6;
+    z-index: 5;
+}
+
+.player-card__error p {
+    margin: 0;
+    font-size: 12px;
+    color: #f0a0a0;
+    max-width: 90%;
+}
+
+.player-card__footer {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 1px 6px;
+    font-size: 10px;
+    color: #7a7b80;
+    background: #202124;
+    border-top: 1px solid #3a3b40;
+    overflow: hidden;
+}
+
+.player-card__meta {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.player-card__meta span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.player-card__meta span:not(:last-child)::after {
+    content: '·';
+    margin-left: 6px;
+    color: #4a4b50;
+}
+
+.player-card__metrics {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .player-card__body {
+    position: relative;
     flex: 1 1 auto;
     min-height: 0;
     /* The real content here is a WebContentsView layered on top by the main process. */
 }
 
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+ntv-input input,
+ntv-input textarea {
+    font-weight: normal !important;
 }
 
-.modal-overlay[hidden] {
-    display: none;
+/* ntv-modal's own body/header/footer render with a white background — override the
+   app's global light-on-dark text color so projected content stays readable. */
+.modal-header__title {
+    margin: 0 0 4px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e1f22;
 }
 
-.modal {
-    background: #2a2b2f;
-    border: 1px solid #3a3b40;
-    border-radius: 6px;
-    padding: 20px;
-    width: 360px;
-}
-
-.modal h2 {
-    margin: 0 0 12px;
-    font-size: 16px;
-}
-
-.modal__url-input {
-    width: 100%;
-    padding: 8px;
-    background: #1e1f22;
-    border: 1px solid #3a3b40;
-    color: #e6e6e6;
-    border-radius: 4px;
-    font-size: 14px;
-}
-
-.modal__actions {
+[modal-footer] {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
+    gap: 10px;
+    padding-top: 12px;
+    margin-top: 4px;
+    border-top: 1px solid #ececee;
 }
 
-.modal__actions button {
-    padding: 6px 12px;
-    border-radius: 4px;
+/* Existing URL stays left, New Instance sits at the far right corner,
+   Quick Instance lands centered in the space between them. */
+.mode-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 4px 0 18px;
+}
+
+/* ntv-input's own label (used via the [label] input) inherits the app's
+   global light-on-dark text color, which is nearly invisible against the
+   modal's white background - same class of fix as .modal-header__title. */
+ntv-input label {
+    color: #1e1f22 !important;
+}
+
+/* Same fix, same reason, for ntv-textarea (used by the License IDs field) -
+   a separate Component Pantry component from ntv-input, so the rule above
+   never covered it. */
+ntv-textarea label {
+    color: #1e1f22 !important;
+}
+
+ntv-textarea textarea {
+    font-weight: normal !important;
+}
+
+.instance-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.instance-form__field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.instance-form__label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b6d75;
+}
+
+.instance-form__hint {
+    margin: 0;
+    font-size: 12px;
+    color: #8a8b90;
+}
+
+.instance-form__hint--warning {
+    color: #e0a030;
+}
+
+.instance-form__dropzone {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    border: 1px dashed #d6d7db;
+    border-radius: 8px;
+    transition:
+        border-color 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.instance-form__dropzone--active {
+    border-color: #6c8cff;
+    background: #f3f6ff;
+}
+
+.build-log {
+    max-height: 260px;
+    overflow-y: auto;
+    background: #0d1117;
     border: 1px solid #3a3b40;
-    background: #1e1f22;
+    border-radius: 4px;
+    padding: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.5;
     color: #e6e6e6;
-    cursor: pointer;
 }
 
-.modal__submit-button {
-    background: #4f7bff !important;
-    border-color: #4f7bff !important;
-    color: white !important;
+.build-log__line {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.build-error {
+    margin: 8px 0 0;
+    color: #d1332b;
+    font-size: 13px;
+}
+
+/* Indicator for a build still running in the background after the modal's
+   been minimized - see AppComponent.closeModal()/reopenBuildProgress().
+   Floats over the grid-mount's own reserved bottom strip (.grid-mount--
+   reserve-badge above) rather than the toolbar - that reserved padding is
+   real layout space no player's measured bounds ever land on, so this stays
+   visible without needing to fight a WebContentsView's native stacking. */
+.build-badge {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: #1f2a44;
+    border: 1px solid #3a4a6b;
+    border-radius: 999px;
+    color: #cfe0ff;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    transition: border-color 0.15s ease;
+}
+
+.build-badge:hover {
+    border-color: #6c8cff;
+}
+
+.build-badge--error {
+    background: #3a1f22;
+    border-color: #6b3a3f;
+    color: #ffcfd6;
+}
+
+.build-badge__spinner {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(207, 224, 255, 0.35);
+    border-top-color: #6c8cff;
+    animation: build-badge-spin 0.8s linear infinite;
+    flex: 0 0 auto;
+}
+
+@keyframes build-badge-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }

@@ -4,7 +4,7 @@
     "description": "Enterprise Node.js REST API Server with TypeScript",
     "main": "dist/server.js",
     "scripts": {
-        "dev": "NODE_ENV=development node --watch --require ts-node/register --require tsconfig-paths/register src/server.ts",
+        "dev": "cross-env NODE_ENV=development node --watch --require ts-node/register --require tsconfig-paths/register src/server.ts",
         "build": "rimraf dist && tsc",
         "start": "node -r module-alias/register dist/server.js",
         "start:prod": "NODE_ENV=production node -r module-alias/register dist/server.js",
@@ -54,6 +54,7 @@
         "@types/supertest": "^7.2.1",
         "@typescript-eslint/eslint-plugin": "^8.67.0",
         "@typescript-eslint/parser": "^8.67.0",
+        "cross-env": "^10.1.0",
         "eslint": "^10.8.1",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-prettier": "^5.5.6",

@@ -11,14 +11,34 @@
         "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
     },
     "dependencies": {
-        "uuid": "^14.0.1"
+        "@angular/cdk": "^22.1.5",
+        "@angular/common": "^22.1.4",
+        "@angular/compiler": "^22.1.4",
+        "@angular/core": "^22.1.4",
+        "@angular/forms": "^22.1.4",
+        "@angular/platform-browser": "^22.1.4",
+        "@angular/router": "^22.1.4",
+        "@lottiefiles/lottie-player": "^2.0.12",
+        "@ntv360/component-pantry": "^0.7.9",
+        "apexcharts": "^7.1.0",
+        "lottie-web": "^5.13.0",
+        "ng-apexcharts": "^3.1.0",
+        "ngx-lottie": "^22.0.0",
+        "uuid": "^14.0.1",
+        "zone.js": "^0.16.2"
     },
     "devDependencies": {
+        "@analogjs/vite-plugin-angular": "^2.7.1",
+        "@angular/build": "^22.1.7",
+        "@angular/compiler-cli": "^22.1.4",
         "@electron-toolkit/tsconfig": "^2.0.0",
         "@types/node": "^24.13.3",
+        "autoprefixer": "^10.5.4",
         "electron": "^43.3.0",
         "electron-builder": "^26.15.3",
         "electron-vite": "^5.0.0",
+        "postcss": "^8.5.26",
+        "tailwindcss": "^3.4.19",
         "typescript": "^6.0.3",
         "vite": "^7.3.6"
     },

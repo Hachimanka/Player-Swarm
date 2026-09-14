@@ -1,10 +1,10 @@
 # Player Swarm (desktop)
 
-A desktop app that hosts many independent, isolated Chromium instances ("players") inside a single window. This is Phase 1 ("core") of the brief in [`../INITPROJECT.md`](../INITPROJECT.md): the app shell, Add/Remove Player, and the responsive grid.
+A desktop app that hosts many independent, isolated Chromium instances ("players") inside a single window, per the brief in [`../INITPROJECT.md`](../INITPROJECT.md). Phases 1, 2, and most of 3/4 are built - see [Known limits](#known-limits) for the honest remaining gap list.
 
 ## Stack
 
-Electron 43 + TypeScript (main, preload, renderer) + Vite (via [`electron-vite`](https://electron-vite.org)) for the renderer bundle + `electron-builder` for packaging. Vanilla TS + CSS Grid for the shell UI, no framework.
+Electron 43 + TypeScript (main, preload, renderer) + Vite (via [`electron-vite`](https://electron-vite.org)) for the renderer bundle + `electron-builder` for packaging. The shell UI is Angular (standalone components, signals) + Tailwind CSS + [`@ntv360/component-pantry`](https://www.npmjs.com/package/@ntv360/component-pantry) for UI elements - a deliberate deviation from the brief's original "vanilla TS + CSS Grid, no framework" suggestion, made when the UI was asked to adopt this org's internal component library. CSS Grid is still what the player layout itself uses; Angular is just the rendering framework around it now.
 
 ## Architecture decision: `WebContentsView`, not `<webview>`
 
@@ -16,14 +16,17 @@ Each player is a `WebContentsView` created and owned entirely by the main proces
 
 **The trade-off, and how it's handled:** a `WebContentsView` is not a DOM node — it can't be visually contained by renderer HTML. Two consequences, both solved in this codebase:
 
-1. **Positioning.** The renderer lays out placeholder grid cells ([`src/renderer/grid.ts`](src/renderer/grid.ts)) and reports each cell's `getBoundingClientRect()` to the main process over IPC (`grid:report-bounds`) whenever the layout changes (player added/removed, window resize, via a `ResizeObserver` + an explicit report after every render). The main process matches each report to its `WebContentsView` and calls `setBounds()`. There is no other way to keep them in sync — nothing does this automatically.
-2. **Stacking.** `contentView.addChildView()` always stacks guest views **above** the shell renderer's own layer — there's no z-index to negotiate. Any renderer-drawn overlay (currently just the "Add Player" modal) would render underneath every player and be invisible. The renderer calls `window.playerSwarm.setOverlayVisible(true/false)` when it opens/closes such an overlay; the main process responds by collapsing every guest view to `0×0` (and restoring its last known bounds on close) — see `PlayerManager.setOverlayVisible()`. This is the mechanism to reach for whenever a new renderer-drawn overlay is added later.
+1. **Positioning.** The renderer lays out placeholder grid cells ([`src/renderer/grid.component.ts`](src/renderer/grid.component.ts)) and reports each cell's `getBoundingClientRect()` to the main process over IPC (`grid:report-bounds`) whenever the layout changes (player added/removed, window resize, scrolling the maximize-mode thumbnail strip, via a `ResizeObserver` + an explicit report after every render). The main process matches each report to its `WebContentsView` and calls `setBounds()`. There is no other way to keep them in sync — nothing does this automatically.
+2. **Stacking.** `contentView.addChildView()` always stacks guest views **above** the shell renderer's own layer — there's no z-index to negotiate. Any renderer-drawn overlay (the "Add Player" modal, a per-player crash/error card, a floating status badge) would render underneath every player and be invisible. Two mechanisms handle this, both in `PlayerManager`:
+    - **App-wide overlays** (the modal): the renderer calls `window.playerSwarm.setOverlayVisible(true/false)`; the main process collapses every guest view to `0×0` and restores last-known bounds on close (`setOverlayVisible()`).
+    - **Per-player overlays** (a crashed/errored player's own error card): the same `0×0` trick, scoped to just that one player (`setPlayerError()`/`clearPlayerError()`), so the rest of the grid stays interactive while one player is showing its recovery card.
+    - A genuinely floating, always-visible renderer element (the "build in progress" badge) instead reserves real, measured layout space via CSS padding that the grid's own bounds math never assigns to a player - see `.grid-mount--reserve-badge` in `style.css`. Reach for the `0×0`-hide approach for anything tied to a specific overlay's open/close lifecycle; reach for reserved layout space for something that needs to coexist with a full player grid indefinitely.
 
 ## Session-partition model
 
 Every player gets a stable UUID at creation and a Chromium session partition of `persist:player-<uuid>`. That's what actually gives each player its own cookies, localStorage, and cache — Chromium persists a `persist:`-prefixed partition to disk under `userData` on its own, independent of anything this app does.
 
-Phase 1 does **not** persist the player list itself (which players existed, their URLs) — that's Phase 3 ("Persist layout"). Right now, the list of players lives only in the main process's memory ([`src/main/store.ts`](src/main/store.ts)) for the lifetime of the run. Restarting the app currently loses the list, though any partition that isn't purged still has its cookies sitting on disk, ready to be reattached once Phase 3 wires up loading the saved list back into `PlayerManager`.
+The player list itself (which players existed, their URLs) is persisted too (Phase 3, "Persist layout") — [`src/main/store.ts`](src/main/store.ts) writes it to the same JSON config file [`src/main/settings.ts`](src/main/settings.ts) already used for other app settings, on every add/remove. On the next launch, `PlayerManager.restoreAll()` recreates each player's `WebContentsView` reusing its exact saved id/partition (never a fresh one), so it reattaches the same cookies/localStorage already sitting on disk instead of starting blank.
 
 ## Adding a player programmatically
 
@@ -38,9 +41,17 @@ await window.playerSwarm.removePlayer(player.id); // prompts to optionally purge
 
 `window.playerSwarm` is the typed API exposed by [`src/preload/index.ts`](src/preload/index.ts) via `contextBridge` — see [`src/shared/types.ts`](src/shared/types.ts) (`PlayerSwarmAPI`) for the full surface.
 
-## Known limits (Phase 1)
+## Known limits
 
-Everything explicitly deferred to a later phase in the brief is not built yet: per-player URL bar / back / forward / mute / DevTools button / error card, crash watchdog, disk persistence of the player list across restarts, custom User-Agent, rename/label, maximize-to-single-view, bulk-add, per-player memory readout, and the global Reload All / Mute All / Close All actions.
+Implemented: per-player URL bar / back / forward / reload / stop / mute / DevTools button, loading indicator, crash/error card with manual Reload and capped-exponential-backoff auto-relaunch (`PlayerManager`'s `render-process-gone`/`unresponsive`/`did-fail-load` handlers), custom User-Agent (set at creation), rename/label, bulk-add N players (staggered ~150ms apart per `INITPROJECT.md` §6), per-player CPU/memory readout (`app.getAppMetrics()`, polled every 3s), and the global Reload All / Mute All / Remove All ("Close All") actions. Disk persistence of the player list and maximize-to-single-view were already done - see the Session-partition model section above and the maximize ⛶ button on each player card.
+
+Still not built or not fully verified:
+
+- **Per-player "pause" that stops media**, distinct from mute - `INITPROJECT.md` §6 asks for this specifically; muting (`setAudioMuted`) is done, but actually pausing `<video>`/`<audio>` playback would need injecting JS into the guest page (`webContents.executeJavaScript()`), which hasn't been added.
+- **GPU hardware-acceleration toggle** is implemented (`app.disableHardwareAcceleration()`, gated on a persisted setting read before `app.whenReady()`), but toggling it triggers a full app relaunch (`app.relaunch()` + `app.exit()`) - not yet tested end-to-end that the relaunch actually round-trips correctly.
+- **`npm run build` has not been run against any of this session's changes** - only `npm run dev` has been exercised. Production Angular AOT + Tailwind's purge step are unverified risk areas, not a formality to skip.
+- **Memory numbers below are stale** - measured before the Angular/Tailwind/Component Pantry migration and everything built since. Needs re-measurement at 1/5/10 players per `INITPROJECT.md` §9's acceptance test before trusting the budget in §6.
+- The acceptance test in `INITPROJECT.md` §9 has not been re-run end-to-end since crash recovery (#3) and label-survives-restart (#4) landed.
 
 ## Measured memory
 
