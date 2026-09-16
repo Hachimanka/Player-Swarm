@@ -97,7 +97,7 @@ function computeGridDimensions(count: number, width: number, height: number): Gr
                         (reload)="reload.emit($event)"
                         (stop)="stop.emit($event)"
                         (toggleMute)="toggleMute.emit($event)"
-                        (openDevTools)="openDevTools.emit($event)"
+                        (openInstanceConsole)="openInstanceConsole.emit($event)"
                         (openMenu)="openMenu.emit($event)"
                         (rename)="rename.emit($event)"
                         (renameClosed)="renameClosed.emit($event)" />
@@ -121,7 +121,7 @@ function computeGridDimensions(count: number, width: number, height: number): Gr
                                 (reload)="reload.emit($event)"
                                 (stop)="stop.emit($event)"
                                 (toggleMute)="toggleMute.emit($event)"
-                                (openDevTools)="openDevTools.emit($event)"
+                                (openInstanceConsole)="openInstanceConsole.emit($event)"
                                 (openMenu)="openMenu.emit($event)"
                                 (rename)="rename.emit($event)"
                                 (renameClosed)="renameClosed.emit($event)" />
@@ -151,7 +151,7 @@ function computeGridDimensions(count: number, width: number, height: number): Gr
                         (reload)="reload.emit($event)"
                         (stop)="stop.emit($event)"
                         (toggleMute)="toggleMute.emit($event)"
-                        (openDevTools)="openDevTools.emit($event)"
+                        (openInstanceConsole)="openInstanceConsole.emit($event)"
                         (openMenu)="openMenu.emit($event)"
                         (rename)="rename.emit($event)"
                         (renameClosed)="renameClosed.emit($event)" />
@@ -180,7 +180,7 @@ export class GridComponent {
     public readonly reload = output<string>();
     public readonly stop = output<string>();
     public readonly toggleMute = output<string>();
-    public readonly openDevTools = output<string>();
+    public readonly openInstanceConsole = output<string>();
     public readonly rename = output<{ id: string; label: string }>();
     public readonly openMenu = output<PlayerMenuTrigger>();
     public readonly renameClosed = output<string>();

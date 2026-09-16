@@ -13,7 +13,6 @@ import {
 import { buildInstance, deleteInstance } from './instanceBuilder';
 import { PlayerManager } from './playerManager';
 import * as settings from './settings';
-import { showToolbarMenu } from './toolbarMenu';
 import { registerInstanceConsole } from './instanceConsole';
 import { PlayerContextMenu } from './playerContextMenu';
 
@@ -258,10 +257,7 @@ function registerIpcHandlers(win: BrowserWindow, players: PlayerManager): void {
 
     const playerMenu = new PlayerContextMenu(win, (id) => players.list().some((player) => player.id === id));
     players.on('changed', () => playerMenu.validatePlayer());
-    ipcMain.on(IPC.showToolbarMenu, (_event, request: ShowToolbarMenuRequest) => {
-        if (request.kind === 'player') playerMenu.show(request);
-        else { playerMenu.hide(); showToolbarMenu(win, request); }
-    });
+    ipcMain.on(IPC.showToolbarMenu, (_event, request: ShowToolbarMenuRequest) => playerMenu.show(request));
 }
 
 app.whenReady().then(() => {

@@ -1,9 +1,22 @@
 import type { PlayerMenuContext, ShowToolbarMenuRequest } from '../shared/types';
 import type { MenuRectangle, PlayerMenuItem } from '../shared/playerMenu';
 
-export const PLAYER_MENU_WIDTH = 200;
-// 10 action rows (20), context row (18), 3 separators (3), padding (4), border (2).
-export const PLAYER_MENU_HEIGHT = 233;
+export const PLAYER_MENU_WIDTH = 168;
+export const TOOLBAR_MENU_WIDTH = 184;
+// Row sizes match player-menu.css. Chrome is 3px padding + 1px border on each side.
+const ROW = 18;
+const NAME_ROW = 17;
+const HEADING = 18;
+const SEPARATOR = 5;
+const CHROME = 8;
+// 10 action rows (18), name/URL row (17), 3 separators (1 + 4 margin), padding (6), border (2).
+export const PLAYER_MENU_HEIGHT = 220;
+
+/** Exact content height of a popup menu, so it never needs to scroll unless the work area is too small. */
+export function menuHeight(items: PlayerMenuItem[], nameRow: boolean): number {
+    return CHROME + (nameRow ? NAME_ROW : 0) + items.reduce((sum, item) =>
+        sum + (item.heading ? HEADING : ROW) + (item.separatorBefore ? SEPARATOR : 0), 0);
+}
 
 export function playerMenuItems(player: PlayerMenuContext): PlayerMenuItem[] {
     return [
@@ -30,10 +43,11 @@ export function screenAnchor(request: Pick<ShowToolbarMenuRequest, 'x' | 'y' | '
         width: Math.round(anchor.width * zoom), height: Math.round(anchor.height * zoom) };
 }
 
-export function playerMenuBounds(anchor: MenuRectangle, workArea: MenuRectangle): MenuRectangle {
+export function playerMenuBounds(anchor: MenuRectangle, workArea: MenuRectangle,
+    size: { width: number; height: number } = { width: PLAYER_MENU_WIDTH, height: PLAYER_MENU_HEIGHT }): MenuRectangle {
     const margin = 4;
-    const width = Math.min(PLAYER_MENU_WIDTH, Math.max(1, workArea.width - margin * 2));
-    const height = Math.min(PLAYER_MENU_HEIGHT, Math.max(1, workArea.height - margin * 2));
+    const width = Math.min(size.width, Math.max(1, workArea.width - margin * 2));
+    const height = Math.min(size.height, Math.max(1, workArea.height - margin * 2));
     const gap = anchor.height > 0 ? 2 : 0;
     let x = anchor.x;
     let y = anchor.y + anchor.height + gap;

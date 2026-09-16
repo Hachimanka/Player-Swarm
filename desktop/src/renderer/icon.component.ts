@@ -28,7 +28,7 @@ const ICONS = {
     expand: 'M15 3h6v6 M9 21H3v-6 M21 3l-7 7 M3 21l7-7',
     collapse: 'M4 14h6v6 M20 10h-6V4 M14 10l7-7 M3 21l7-7',
     more: 'M12 3.9a2 2 0 1 0 0 4 2 2 0 0 0 0-4z M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z M12 16.1a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
-    devtools: 'M16 18l6-6-6-6 M8 6l-6 6 6 6',
+    terminal: 'M4 17l6-6-6-6 M12 19h8',
     trash: 'M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6 M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
     plus: 'M12 5v14 M5 12h14',
     settings: 'M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6',

@@ -1,9 +1,11 @@
-import type { PlayerMenuAPI, PlayerMenuData } from '../shared/playerMenu';
+import { menuItemKey, type PlayerMenuAPI, type PlayerMenuData } from '../shared/playerMenu';
 
 declare global { interface Window { playerMenu: PlayerMenuAPI } }
 
 const menu = document.querySelector<HTMLDivElement>('#player-menu')!;
 let current: PlayerMenuData | null = null;
+
+const MENU_LABELS: Record<string, string> = { actions: 'Actions', remove: 'Remove', layout: 'Layout', settings: 'Settings' };
 
 function compactUrl(url: string): string {
     try {
@@ -35,25 +37,41 @@ function button(label: string, action: string, enabled: boolean, mark = '') {
 function render(data: PlayerMenuData) {
     current = data;
     menu.replaceChildren();
-    menu.setAttribute('aria-label', `Actions for ${data.name}`);
-    const header = button(data.url ? compactUrl(data.url) : data.name || 'Player', 'copy-url', Boolean(data.url), data.url ? '⧉' : '');
-    header.classList.add('popup-item--context');
-    header.title = data.url ? `${data.name}\n${data.url}\nClick to copy the full URL` : data.name;
-    header.setAttribute('aria-label', data.url ? `Copy player URL: ${data.url}` : data.name);
-    menu.append(header);
+    menu.style.width = `min(100vw, ${data.width}px)`;
+    menu.style.height = `min(100vh, ${data.height}px)`;
+    if (data.kind === 'player') {
+        menu.setAttribute('aria-label', `Actions for ${data.name}`);
+        const header = button(data.url ? compactUrl(data.url) : data.name || 'Player', 'copy-url', Boolean(data.url), data.url ? '⧉' : '');
+        header.classList.add('popup-item--context');
+        header.title = data.url ? `${data.name}\n${data.url}\nClick to copy the full URL` : data.name;
+        header.setAttribute('aria-label', data.url ? `Copy player URL: ${data.url}` : data.name);
+        menu.append(header);
+    } else {
+        menu.setAttribute('aria-label', MENU_LABELS[data.kind] ?? 'Menu');
+    }
     for (const item of data.items) {
         if (item.separatorBefore) {
             const separator = document.createElement('div');
             separator.className = 'popup-separator'; separator.setAttribute('role', 'separator');
             menu.append(separator);
         }
-        const element = button(item.label, item.action, item.enabled, item.checked ? '✓' : '');
+        if (item.heading) {
+            const heading = document.createElement('div');
+            heading.className = 'popup-heading'; heading.setAttribute('role', 'presentation'); heading.textContent = item.label;
+            menu.append(heading);
+            continue;
+        }
+        const element = button(item.label, menuItemKey(item), item.enabled, item.checked ? (item.radio ? '●' : '✓') : '');
         if (item.checked !== undefined) {
-            element.setAttribute('role', 'menuitemcheckbox');
+            element.setAttribute('role', item.radio ? 'menuitemradio' : 'menuitemcheckbox');
             element.setAttribute('aria-checked', String(item.checked));
         }
         if (item.destructive) element.classList.add('popup-item--danger');
         menu.append(element);
+    }
+    // Long labels (e.g. a Docker repository folder) are ellipsized; keep the full text in a tooltip.
+    for (const text of menu.querySelectorAll<HTMLElement>('.popup-item__text')) {
+        if (text.scrollWidth > text.clientWidth && !text.parentElement!.title) text.parentElement!.title = text.textContent ?? '';
     }
     menu.scrollTop = 0;
     menu.focus();

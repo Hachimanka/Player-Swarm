@@ -195,13 +195,15 @@ const HEIGHT_CAP_XS = 96;
                         </button>
                     }
 
-                    @if (density() === 'lg') {
+                    @if (density() === 'lg' || density() === 'md') {
                         <button
                             type="button"
                             class="player-card__btn"
-                            title="Open DevTools"
-                            (click)="openDevTools.emit(player().id)">
-                            <ui-icon name="devtools" />
+                            aria-label="Instance Console"
+                            [title]="player().instanceName ? 'Instance Console' : 'Instance Console (no Docker instance)'"
+                            [disabled]="!player().instanceName"
+                            (click)="openInstanceConsole.emit(player().id)">
+                            <ui-icon name="terminal" />
                         </button>
                     }
 
@@ -225,21 +227,18 @@ const HEIGHT_CAP_XS = 96;
 
                     <!--
                         The overflow route for whatever this density tier had
-                        to drop. A separate Electron popup window -
-                        it has to open over the player below it, which no
-                        renderer-drawn panel can do. Hidden at the lg tier, where
-                        nothing is dropped; right-clicking the header still
-                        reaches the same menu at every tier.
+                        to drop, plus DevTools at every tier. A separate
+                        Electron popup window - it has to open over the player
+                        below it, which no renderer-drawn panel can do.
+                        Right-clicking the header reaches the same menu.
                     -->
-                    @if (density() !== 'lg') {
-                        <button
-                            type="button"
-                            class="player-card__btn"
-                            title="More actions"
-                            (click)="onMenuButton($event)">
-                            <ui-icon name="more" />
-                        </button>
-                    }
+                    <button
+                        type="button"
+                        class="player-card__btn"
+                        title="More actions"
+                        (click)="onMenuButton($event)">
+                        <ui-icon name="more" />
+                    </button>
                 </div>
 
                 @if (runtimeState()?.loading) {
@@ -305,7 +304,7 @@ export class PlayerCardComponent {
     public readonly reload = output<string>();
     public readonly stop = output<string>();
     public readonly toggleMute = output<string>();
-    public readonly openDevTools = output<string>();
+    public readonly openInstanceConsole = output<string>();
     public readonly rename = output<{ id: string; label: string }>();
     /** Asks AppComponent to open the player popup at this CSS viewport point/button rectangle. */
     public readonly openMenu = output<PlayerMenuTrigger>();

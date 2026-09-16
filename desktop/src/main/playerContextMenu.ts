@@ -1,16 +1,22 @@
 import { BrowserWindow, clipboard, ipcMain, screen, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
 import { join } from 'node:path';
 import { IPC, type ShowToolbarMenuRequest, type ToolbarMenuActionEvent } from '../shared/types';
-import type { PlayerMenuData } from '../shared/playerMenu';
-import { playerMenuBounds, playerMenuItems, screenAnchor } from './playerMenuModel';
+import { menuItemKey, type PlayerMenuData } from '../shared/playerMenu';
+import { menuHeight, PLAYER_MENU_WIDTH, playerMenuBounds, playerMenuItems, screenAnchor, TOOLBAR_MENU_WIDTH } from './playerMenuModel';
+import { toolbarMenuItems } from './toolbarMenu';
 
 const C = { initial: 'player-menu:initial', ready: 'player-menu:ready', choose: 'player-menu:choose',
     dismiss: 'player-menu:dismiss', update: 'player-menu:update' };
 
-/** A single reusable child window. It never attaches to or hides player views. */
+/**
+ * A single reusable child window for the player menu and the toolbar's
+ * Actions/Remove/Layout/Settings menus. It never attaches to or hides player views.
+ */
 export class PlayerContextMenu {
     private popup?: BrowserWindow;
-    private active?: PlayerMenuData & { playerId: string };
+    private active?: PlayerMenuData & { playerId?: string; trigger: string };
+    /** Which button's menu was just dismissed, so clicking that button again closes the menu instead of reopening it. */
+    private lastDismissed?: { trigger: string; at: number };
     private loaded = false;
     private sequence = 0;
     private disposed = false;
@@ -25,7 +31,7 @@ export class PlayerContextMenu {
     };
     private readonly initial = (event: IpcMainInvokeEvent) => this.allowed(event) ? this.active || null : null;
     private readonly ready = (event: IpcMainEvent, token: number) => {
-        if (!Number.isSafeInteger(token) || !this.allowed(event, token) || !this.active || !this.exists(this.active.playerId)) return;
+        if (!Number.isSafeInteger(token) || !this.allowed(event, token) || !this.active || !this.stillValid(this.active)) return;
         if (!this.parent.isFocused() && !this.popup?.isFocused()) { this.hide(); return; }
         this.loaded = true;
         this.popup!.show();
@@ -34,17 +40,18 @@ export class PlayerContextMenu {
     private readonly choose = (event: IpcMainEvent, token: number, action: string) => {
         if (!Number.isSafeInteger(token) || !this.allowed(event, token) || !this.popup?.isVisible() || !this.active) return;
         const data = this.active;
-        if (!this.exists(data.playerId)) { this.hide(); return; }
-        if (action === 'copy-url') {
+        if (!this.stillValid(data)) { this.hide(); return; }
+        if (action === 'copy-url' && data.kind === 'player') {
             if (data.url) clipboard.writeText(data.url);
             this.hide(true);
             return;
         }
-        if (!data.items.some((item) => item.action === action && item.enabled)) return;
+        const item = data.items.find((candidate) => !candidate.heading && candidate.enabled && menuItemKey(candidate) === action);
+        if (!item) return;
         this.hide(true);
-        this.parent.webContents.send(IPC.toolbarMenuAction, {
-            kind: 'player', action, playerId: data.playerId,
-        } satisfies ToolbarMenuActionEvent);
+        this.parent.webContents.send(IPC.toolbarMenuAction, data.kind === 'player'
+            ? { kind: 'player', action: item.action, playerId: data.playerId }
+            : { kind: data.kind, action: item.action, ...(item.value === undefined ? {} : { value: item.value }) } satisfies ToolbarMenuActionEvent);
     };
     private readonly closeRequest = (event: IpcMainEvent, token: number) => {
         if (Number.isSafeInteger(token) && this.allowed(event, token)) this.hide(true);
@@ -73,24 +80,36 @@ export class PlayerContextMenu {
             (token === undefined || this.active?.token === token);
     }
 
+    private stillValid(data: { kind: string; playerId?: string }) {
+        return data.kind !== 'player' || (!!data.playerId && this.exists(data.playerId));
+    }
+
     show(request: ShowToolbarMenuRequest) {
         const player = request.context.player;
-        if (this.disposed || !player || !this.exists(player.id) || !this.parent.isVisible()) return;
+        if (this.disposed || !this.parent.isVisible()) return;
+        if (request.kind === 'player' ? !player || !this.exists(player.id) : !['actions', 'remove', 'layout', 'settings'].includes(request.kind)) return;
+        const trigger = request.anchor ? `${request.kind}:${player?.id ?? ''}` : '';
+        // A click on the button whose menu is open first blurs the popup (closing it), then arrives here.
+        if (trigger && this.active?.trigger === trigger && this.popup?.isVisible()) { this.hide(true); return; }
+        if (trigger && this.lastDismissed?.trigger === trigger && Date.now() - this.lastDismissed.at < 300) { this.lastDismissed = undefined; return; }
         let anchor;
         try { anchor = screenAnchor(request, this.parent.getContentBounds(), this.parent.webContents.getZoomFactor()); }
         catch { return; }
         const display = screen.getDisplayNearestPoint({ x: anchor.x + Math.round(anchor.width / 2), y: anchor.y + Math.round(anchor.height / 2) });
-        const bounds = playerMenuBounds(anchor, display.workArea);
+        const items = request.kind === 'player' ? playerMenuItems(player!) : toolbarMenuItems(request.kind, request.context);
+        const width = request.kind === 'player' ? PLAYER_MENU_WIDTH : TOOLBAR_MENU_WIDTH;
+        const height = menuHeight(items, request.kind === 'player');
+        const bounds = playerMenuBounds(anchor, display.workArea, { width, height });
         this.hide();
-        this.active = { token: ++this.sequence, playerId: player.id, name: player.name,
-            url: player.url || '', items: playerMenuItems(player) };
+        this.active = { token: ++this.sequence, kind: request.kind, playerId: player?.id, trigger, name: player?.name ?? '',
+            url: player?.url || '', width, height, items };
         if (!this.popup || this.popup.isDestroyed()) {
             this.loaded = false;
             const popup = new BrowserWindow({
                 ...bounds, parent: this.parent, show: false, frame: false, thickFrame: false,
                 resizable: false, movable: false, minimizable: false, maximizable: false,
-                fullscreenable: false, skipTaskbar: true, roundedCorners: false, hasShadow: true,
-                backgroundColor: '#171a21', title: 'Player actions',
+                fullscreenable: false, skipTaskbar: true, roundedCorners: false, hasShadow: false, transparent: true,
+                backgroundColor: '#00000000', title: 'Menu',
                 webPreferences: { preload: join(__dirname, '../preload/player-menu.js'),
                     sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false },
             });
@@ -117,6 +136,8 @@ export class PlayerContextMenu {
     }
 
     hide(restoreFocus = false) {
+        // Only an outside click (focus loss) can be that same button being clicked again; choosing or Escape cannot.
+        if (!restoreFocus && this.active?.trigger && this.popup?.isVisible()) this.lastDismissed = { trigger: this.active.trigger, at: Date.now() };
         this.active = undefined;
         clearTimeout(this.focusTimer);
         if (this.popup && !this.popup.isDestroyed()) this.popup.hide();
@@ -124,7 +145,7 @@ export class PlayerContextMenu {
     }
 
     validatePlayer() {
-        if (this.active && !this.exists(this.active.playerId)) this.hide();
+        if (this.active && !this.stillValid(this.active)) this.hide();
     }
 
     private dispose() {

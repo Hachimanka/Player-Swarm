@@ -1,6 +1,6 @@
 # Instance Console
 
-Open a Docker-backed player's native actions menu and choose **Open Instance Console**. Each player has its own independent window; opening the same player's console again focuses it. Players added only by URL have no persisted Docker mapping, so the action is disabled for them.
+Click the **Instance Console** (`>_`) button in a Docker-backed player's card header, or choose **Open Instance Console** from its `⋮` / right-click menu. The header button appears at the `lg` and `md` card sizes; smaller cards use the menu. Each player has its own independent window; opening the same player's console again focuses it. Players added only by URL have no persisted Docker mapping, so the action is disabled for them.
 
 The console opens on **Logs**, following the last 100 lines of the `player-server` container's stdout/stderr. The service selector is populated by `docker compose config --services`, including `player-ui` when present. Search filters displayed text; Copy and Export use that filtered text. Clear clears only the display. Last N lines and timestamps reload history. Stop following terminates the log subprocess. Reconnect reloads history using the current settings. The display retains up to 2 MB; it does not change Docker's own log retention.
 

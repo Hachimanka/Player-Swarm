@@ -1,8 +1,8 @@
-# Compact player menu
+# Compact menus
 
-The player card's right-click and overflow menu uses a separate, sandboxed Electron child window. The toolbar menus continue to use native `Menu.popup()`. Player content remains in its existing WebContentsViews; the popup does not hide, resize, or reorder those views.
+The player card's right-click and `⋮` menu uses a separate, sandboxed Electron child window. `⋮` is shown at every card size, and **Open DevTools** is reached only through this menu (the card header has an Instance Console button instead). The toolbar's **Actions**, **Remove**, **Layout** and **Settings** menus open in the same popup window with the same styling (`toolbarMenu.ts` builds their items). They are 184px wide, have no URL row, and are exactly as tall as their items. Checkboxes show ✓ and radio choices show ●. The popup has no submenus, so Layout lists **Columns** and **Per page** as labelled sections, each ending in **Custom…**. Long labels, such as the Docker repository folder, are ellipsized with the full text in a tooltip. Clicking a toolbar button while its menu is open closes the menu. Chosen items send the same `{kind, action, value}` event the native menus did. Player content remains in its existing WebContentsViews; the popup does not hide, resize, or reorder those views.
 
-The menu is 200 × 233 device-independent pixels with 20px action rows, an 18px URL row, 11px action text, 2px outer padding, and three 1px separators. It reuses the renderer's existing dark colors and fonts. Long text stays on one line with ellipsis. Hovering the URL shows the full URL/name, and clicking it copies the original URL. The existing action order, checked states, enabled states and renderer callbacks are retained.
+The menu is 168 × 220 device-independent pixels with 18px action rows, a 17px monospace URL row, 11px action text, 3px outer padding, three 1px separators and a 6px corner radius. The popup window is transparent and frameless so the rounded corners are drawn in CSS. It reuses the renderer's existing dark colors and fonts. Long text stays on one line with ellipsis. Hovering the URL shows the full URL/name, and clicking it copies the original URL. The existing action order, checked states, enabled states and renderer callbacks are retained.
 
 ## Placement and dismissal
 

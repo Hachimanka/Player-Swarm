@@ -12,7 +12,8 @@
         "test:console": "node --test tests/console.test.cjs",
         "test:console:electron": "electron-vite build && node tests/console-electron.cjs",
         "test:player-menu": "node --test tests/player-menu.test.cjs",
-        "test:player-menu:electron": "electron-vite build && node tests/player-menu-electron.cjs"
+        "test:player-menu:electron": "electron-vite build && node tests/player-menu-electron.cjs",
+        "test:player-header:electron": "electron-vite build && node tests/player-header-electron.cjs"
     },
     "dependencies": {
         "@angular/cdk": "^22.1.5",

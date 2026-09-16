@@ -126,70 +126,94 @@ ui-icon svg {
     min-width: 8px;
 }
 
-.toolbar__stats {
+/* Fleet rollup - a quiet two-line stack (counts/status over CPU/RAM), no
+   taller than the toolbar buttons beside it. Numbers carry the weight; units
+   and separators recede. */
+.fleet {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
-}
-
-.stat {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
+    font-size: 10px;
+    line-height: 1;
     color: var(--text-muted);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+    cursor: default;
 }
 
-.stat--total {
+.fleet__row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+}
+
+.fleet__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.fleet__num {
+    font-weight: 600;
     color: var(--text);
 }
 
-.stat--total strong {
-    font-weight: 600;
+.fleet__unit,
+.fleet__label {
+    font-size: 9.5px;
+    font-weight: 500;
 }
 
-.stat__pip {
-    width: 7px;
-    height: 7px;
+.fleet__unit {
+    color: var(--text-dim);
+}
+
+.fleet__sep {
+    color: var(--border-strong);
+}
+
+.fleet__pip {
+    width: 5px;
+    height: 5px;
+    margin-right: 1px;
     border-radius: 50%;
     background: var(--status-idle);
     flex: 0 0 auto;
 }
 
-.stat--online .stat__pip {
+.fleet__item--online .fleet__pip {
     background: var(--status-online);
 }
-.stat--loading .stat__pip {
+.fleet__item--loading .fleet__pip {
     background: var(--status-loading);
 }
-.stat--recovering .stat__pip {
+.fleet__item--recovering .fleet__pip {
     background: var(--status-recovering);
 }
-.stat--error .stat__pip {
+.fleet__item--error .fleet__pip {
     background: var(--status-error);
 }
-.stat--error {
+.fleet__item--error,
+.fleet__item--error .fleet__num {
     color: var(--status-error);
 }
 
-.stat--usage {
-    color: var(--text-dim);
-    font-family: var(--font-mono);
-    font-size: 11px;
+/* Second line: combined usage, a step dimmer than the status line. */
+.fleet__usage .fleet__num {
+    font-weight: 500;
+    color: var(--text-muted);
 }
 
-/* The status labels are the first thing to go when the window narrows - the
-   pip and count still carry the meaning without them. */
+/* Narrow windows keep the count and status pips; the usage line and the
+   status words go first. The tooltip still carries all of it. */
 @media (max-width: 1100px) {
-    .stat__label {
-        display: none;
-    }
-    .stat--usage {
+    .fleet__usage,
+    .fleet__label {
         display: none;
     }
 }

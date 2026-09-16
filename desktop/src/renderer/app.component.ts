@@ -39,29 +39,46 @@ const STATUS_ORDER: PlayerStatus[] = ['error', 'recovering', 'loading', 'online'
                 }
             </div>
 
-            @if (players().length > 0) {
-                <div class="toolbar__divider"></div>
+            <div class="toolbar__divider"></div>
 
-                <!-- Fleet rollup: the one place that answers "is anything wrong right now" without scanning every card. -->
-                <div class="toolbar__stats">
-                    <span class="stat stat--total">
-                        <strong>{{ players().length }}</strong>
-                        {{ players().length === 1 ? 'player' : 'players' }}
+            <!--
+                Fleet rollup: a compact two-line stack that answers "is anything
+                wrong right now" without scanning every card - counts/status on
+                top, combined CPU/RAM underneath. When every player shares one
+                status, its count would only repeat the total, so it is dropped
+                (6 Players · ● Running). The tooltip keeps the full text.
+            -->
+            <div class="fleet" [title]="fleetTooltip()">
+                <div class="fleet__row">
+                    <span class="fleet__item">
+                        <span class="fleet__num">{{ players().length }}</span>
+                        <span class="fleet__unit">{{ players().length === 1 ? 'Player' : 'Players' }}</span>
                     </span>
                     @for (entry of statusSummary(); track entry.status) {
-                        <span class="stat stat--{{ entry.status }}" [title]="entry.count + ' ' + entry.label">
-                            <span class="stat__pip"></span>
-                            {{ entry.count }}
-                            <span class="stat__label">{{ entry.label }}</span>
-                        </span>
-                    }
-                    @if (resourceSummary(); as usage) {
-                        <span class="stat stat--usage" title="Combined CPU and resident memory across all players">
-                            {{ usage.cpu }} · {{ usage.memory }}
+                        <span class="fleet__sep" aria-hidden="true">·</span>
+                        <span class="fleet__item fleet__item--{{ entry.status }}">
+                            <span class="fleet__pip"></span>
+                            @if (statusSummary().length > 1) {
+                                <span class="fleet__num">{{ entry.count }}</span>
+                            }
+                            <span class="fleet__label">{{ entry.label }}</span>
                         </span>
                     }
                 </div>
-            }
+                @if (players().length > 0 && resourceSummary(); as usage) {
+                    <div class="fleet__row fleet__usage">
+                        <span class="fleet__item">
+                            <span class="fleet__num">{{ usage.cpu }}%</span>
+                            <span class="fleet__unit">CPU</span>
+                        </span>
+                        <span class="fleet__sep" aria-hidden="true">·</span>
+                        <span class="fleet__item">
+                            <span class="fleet__num">{{ usage.memory }}</span>
+                            <span class="fleet__unit">{{ usage.memoryUnit }}</span>
+                        </span>
+                    </div>
+                }
+            </div>
 
             <div class="toolbar__spacer"></div>
 
@@ -201,7 +218,7 @@ const STATUS_ORDER: PlayerStatus[] = ['error', 'recovering', 'loading', 'online'
                 (reload)="onReloadPlayer($event)"
                 (stop)="onStopPlayer($event)"
                 (toggleMute)="onToggleMute($event)"
-                (openDevTools)="onOpenDevTools($event)"
+                (openInstanceConsole)="onOpenInstanceConsole($event)"
                 (openMenu)="openPlayerMenu($event)"
                 (renameClosed)="onRenameClosed()"
                 (rename)="onRename($event)" />
@@ -422,7 +439,7 @@ export class AppComponent {
         }
         return STATUS_ORDER.filter((status) => counts.has(status)).map((status) => ({
             status,
-            label: STATUS_LABEL[status].toLowerCase(),
+            label: STATUS_LABEL[status],
             count: counts.get(status) ?? 0,
         }));
     });
@@ -434,9 +451,20 @@ export class AppComponent {
         const cpu = all.reduce((sum, m) => sum + m.cpuPercent, 0);
         const memoryMB = all.reduce((sum, m) => sum + m.memoryMB, 0);
         return {
-            cpu: `${cpu.toFixed(0)}% CPU`,
-            memory: memoryMB >= 1024 ? `${(memoryMB / 1024).toFixed(1)} GB` : `${memoryMB.toFixed(0)} MB`,
+            cpu: cpu.toFixed(0),
+            memory: memoryMB >= 1024 ? (memoryMB / 1024).toFixed(1) : memoryMB.toFixed(0),
+            memoryUnit: memoryMB >= 1024 ? 'GB' : 'MB',
         };
+    });
+
+    /** The fleet row drops redundant counts and hides parts when narrow; the tooltip always has everything. */
+    public readonly fleetTooltip = computed(() => {
+        const total = this.players().length;
+        const lines = [`${total} ${total === 1 ? 'player' : 'players'}`];
+        for (const entry of this.statusSummary()) lines.push(`${entry.count} ${entry.label.toLowerCase()}`);
+        const usage = this.resourceSummary();
+        if (total > 0 && usage) lines.push(`${usage.cpu}% CPU · ${usage.memory} ${usage.memoryUnit} (all players combined)`);
+        return lines.join('\n');
     });
 
     /** Summarises the Layout menu's two settings onto its own button, so the current layout is readable without opening it. */
@@ -574,27 +602,23 @@ export class AppComponent {
     }
 
     /**
-     * Opens a native Electron menu anchored under the trigger button instead
-     * of an HTML dropdown - a WebContentsView always stacks above the
+     * Opens the compact popup menu window anchored under the trigger button
+     * instead of an HTML dropdown - a WebContentsView always stacks above the
      * renderer's own DOM (see playerManager.ts's header comment), so an HTML
      * dropdown can never actually draw over a player, only force it fully
-     * hidden while overlapped (the old black-rectangle bug). A native Menu is
-     * composited by the OS window manager instead, sitting above
-     * WebContentsView with no stacking conflict at all - nothing needs to be
-     * hidden. The button's own rect is already in the right coordinate space:
-     * Menu.popup()'s x/y are relative to the window's content area, same as
-     * getBoundingClientRect() here (see grid.component.ts's reportBounds()
-     * for the same fact established for WebContentsView.setBounds()).
-     *
-     * openPlayerMenu() uses the same request channel, but main routes it to
-     * the separate compact popup window and converts its CSS anchor to screen DIPs.
+     * hidden while overlapped (the old black-rectangle bug). The popup is a
+     * separate child window, so it sits above every WebContentsView and
+     * nothing needs to be hidden. The button rect is in CSS viewport
+     * coordinates; main converts it to screen DIPs and flips the menu near
+     * screen edges. openPlayerMenu() uses the same request channel and window.
      */
     private showMenu(kind: ToolbarMenuKind, event: MouseEvent, context: ToolbarMenuContext): void {
         const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-        window.playerSwarm.showToolbarMenu({ kind, x: rect.left, y: rect.bottom, context });
+        window.playerSwarm.showToolbarMenu({ kind, x: rect.left, y: rect.bottom, context,
+            anchor: { x: rect.left, y: rect.top, width: rect.width, height: rect.height } });
     }
 
-    /** Native toolbar menus and the player popup dispatch through the same existing actions. */
+    /** Toolbar menus and the player menu dispatch through the same existing actions. */
     private onToolbarMenuAction(event: ToolbarMenuActionEvent): void {
         switch (event.kind) {
             case 'actions':
@@ -657,7 +681,7 @@ export class AppComponent {
                 this.onOpenDevTools(id);
                 break;
             case 'openInstanceConsole':
-                void window.playerSwarm.openInstanceConsole(id).catch((error: unknown) => console.error('Could not open Instance Console', error));
+                this.onOpenInstanceConsole(id);
                 break;
             case 'rename':
                 this.renameTargetId.set(id);
@@ -818,6 +842,11 @@ export class AppComponent {
 
     public onOpenDevTools(id: string): void {
         window.playerSwarm.openPlayerDevTools(id);
+    }
+
+    /** Shared by the card header button and the player menu; main resolves the player's Docker instance. */
+    public onOpenInstanceConsole(id: string): void {
+        void window.playerSwarm.openInstanceConsole(id).catch((error: unknown) => console.error('Could not open Instance Console', error));
     }
 
     public onRename(event: { id: string; label: string }): void {

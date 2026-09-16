@@ -1,12 +1,19 @@
-.player-popup { background: var(--surface); font-size: 11px; color-scheme: dark; }
-#player-menu { height: 100%; padding: 2px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: auto; outline: none; user-select: none; }
-.popup-item { display: flex; align-items: center; gap: 4px; width: 100%; height: 20px; padding: 0 6px; border: 0; border-radius: 3px; background: transparent; color: var(--text); text-align: left; font: inherit; cursor: default; outline: none; }
+/* The popup window is transparent so the menu can draw its own rounded corners. */
+html:has(.player-popup), .player-popup { background: transparent; }
+.player-popup { font-size: 11px; color-scheme: dark; }
+#player-menu { padding: 3px; border: 1px solid var(--border-strong); border-radius: 6px; overflow: auto; outline: none; user-select: none;
+    background: linear-gradient(180deg, var(--surface-raised), var(--surface)); scrollbar-width: none; }
+.popup-item { display: flex; align-items: center; gap: 3px; width: 100%; height: 18px; padding: 0 6px 0 3px; border: 0; border-radius: 4px; background: transparent; color: var(--text); text-align: left; font: inherit; line-height: 1; cursor: default; outline: none; }
 .popup-item:enabled:hover, .popup-item:focus-visible { background: var(--surface-hover); }
 .popup-item:focus-visible { box-shadow: inset 0 0 0 1px var(--border-strong); }
 .popup-item:disabled { color: var(--text-dim); }
 .popup-item--danger { color: var(--danger); }
 .popup-item--danger:enabled:hover, .popup-item--danger:focus-visible { background: var(--danger-dim); }
-.popup-item--context { height: 18px; color: var(--text-muted); font-size: 10px; }
-.popup-item__mark { width: 10px; flex: 0 0 10px; text-align: center; font-size: 10px; }
+.popup-item--context { height: 17px; color: var(--text-dim); font-family: var(--font-mono); font-size: 9.5px; }
+.popup-item--context:enabled:hover { color: var(--text-muted); }
+.popup-item__mark { width: 11px; flex: 0 0 11px; text-align: center; font-size: 9px; color: var(--accent); }
+.popup-item[role=menuitemradio] .popup-item__mark { font-size: 6px; }
+.popup-item--context .popup-item__mark, .popup-item--danger .popup-item__mark { color: inherit; }
 .popup-item__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.popup-separator { height: 1px; margin: 1px 6px; background: var(--border); }
+.popup-separator { height: 1px; margin: 2px 4px; background: var(--border); }
+.popup-heading { display: flex; align-items: center; height: 18px; padding: 2px 6px 0 17px; color: var(--text-dim); font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; user-select: none; }
