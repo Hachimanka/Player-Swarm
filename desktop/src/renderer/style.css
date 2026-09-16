@@ -2,6 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   Design tokens
+   A monitoring-console palette: a few near-neutral greys carrying almost all
+   of the UI, with colour reserved for player status. Anything that is not a
+   status signal stays grey on purpose - with 20 players on screen, every
+   coloured pixel that is not telling the operator something is noise.
+   ========================================================================== */
+:root {
+    --bg: #0f1115;
+    --surface: #171a21;
+    --surface-raised: #1d212a;
+    --surface-hover: #252a34;
+    --border: #262b34;
+    --border-strong: #343b47;
+
+    --text: #e4e7ec;
+    --text-muted: #98a2b3;
+    --text-dim: #6b7484;
+
+    --accent: #5b8cff;
+    --accent-dim: #2d3f6b;
+    --danger: #f0574e;
+    --danger-dim: #4a2320;
+
+    --status-online: #35c77f;
+    --status-loading: #5b8cff;
+    --status-recovering: #f2b23e;
+    --status-error: #f0574e;
+    --status-idle: #5f6875;
+
+    --radius: 8px;
+    --radius-sm: 5px;
+    --gap: 8px;
+
+    --font-ui:
+        system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -12,12 +51,10 @@ app-root {
     margin: 0;
     height: 100%;
     width: 100%;
-    font-family:
-        system-ui,
-        -apple-system,
-        sans-serif;
-    background: #1e1f22;
-    color: #e6e6e6;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
     overflow: hidden;
 }
 
@@ -26,188 +63,351 @@ app-root {
     flex-direction: column;
 }
 
+::selection {
+    background: var(--accent-dim);
+}
+
+/* Thin, unobtrusive scrollbars - the thumbnail strip and build log are the
+   only scrollable surfaces, and neither should draw attention. */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+}
+
+/* --------------------------------------------------------------------------
+   Icons — every glyph in the app. Sized by the parent's font-size so one
+   button rule covers all of them; see icon.component.ts.
+   -------------------------------------------------------------------------- */
+ui-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+ui-icon svg {
+    display: block;
+    width: 1em;
+    height: 1em;
+}
+
+/* ==========================================================================
+   Toolbar
+   ========================================================================== */
 .toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     padding: 8px 12px;
-    background: #262b32;
-    border-bottom: 1px solid #3a3b40;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
     flex: 0 0 auto;
+    min-height: 48px;
 }
 
 .toolbar__group {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex: 0 0 auto;
 }
 
 .toolbar__divider {
     width: 1px;
-    height: 22px;
-    background: #3a3b40;
+    align-self: stretch;
+    margin: 4px 2px;
+    background: var(--border);
     flex: 0 0 auto;
 }
 
-/* Pushes Columns/Docker-repo (settings, not player-management actions) to
-   the far right, keeping them visually distinct from the action groups. */
+/* Splits player-management actions (left) from layout/settings (right). */
 .toolbar__spacer {
     flex: 1 1 auto;
+    min-width: 8px;
 }
 
-.toolbar__page-label {
+.toolbar__stats {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     font-size: 12px;
-    color: #b3b3b3;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat--total {
+    color: var(--text);
+}
+
+.stat--total strong {
+    font-weight: 600;
+}
+
+.stat__pip {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--status-idle);
+    flex: 0 0 auto;
+}
+
+.stat--online .stat__pip {
+    background: var(--status-online);
+}
+.stat--loading .stat__pip {
+    background: var(--status-loading);
+}
+.stat--recovering .stat__pip {
+    background: var(--status-recovering);
+}
+.stat--error .stat__pip {
+    background: var(--status-error);
+}
+.stat--error {
+    color: var(--status-error);
+}
+
+.stat--usage {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+/* The status labels are the first thing to go when the window narrows - the
+   pip and count still carry the meaning without them. */
+@media (max-width: 1100px) {
+    .stat__label {
+        display: none;
+    }
+    .stat--usage {
+        display: none;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   Toolbar buttons
+   -------------------------------------------------------------------------- */
+.tb-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 10px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+        background-color 0.12s ease,
+        border-color 0.12s ease,
+        color 0.12s ease;
+}
+
+.tb-btn ui-icon {
+    font-size: 14px;
+}
+
+/* The trailing chevron on a menu button is an affordance, not content. */
+.tb-btn:not(.tb-btn--icon) ui-icon:last-child {
+    font-size: 11px;
+    opacity: 0.55;
+    margin-left: -1px;
+}
+
+.tb-btn:hover:not(:disabled) {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
+.tb-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Add player is the toolbar's call to action. Amber 500/600/700 for the
+   rest/hover/active states, addressed as theme tokens rather than literal
+   hexes - Component Pantry's preset extends Tailwind's palette instead of
+   replacing it, so `amber-*` and `gray-900` resolve through the same theme
+   the library's own components are built against and there is no hard-coded
+   colour to go stale here.
+
+   Note these are Tailwind's amber scale, not one of the pantry's brand ramps
+   (its own `warning` ramp is a different orange: #FFA500 / #DD8F00 / #AF7100).
+
+   Dark text, not white, on all three: white on amber-500 is only 2.1:1, which
+   fails WCAG AA outright, while gray-900 gives 8.3:1 at rest and 5.6:1 on
+   hover. It stays dark through :active too (3.5:1 - above the 3:1 bar for a
+   momentary state) rather than flipping to white mid-press, which would read
+   as a glitch. */
+.tb-btn--primary {
+    @apply bg-amber-500 text-gray-900;
+    border-color: transparent;
+}
+
+.tb-btn--primary:hover:not(:disabled) {
+    @apply bg-amber-600 text-gray-900;
+    border-color: transparent;
+}
+
+.tb-btn--primary:active:not(:disabled) {
+    @apply bg-amber-700 text-gray-900;
+    border-color: transparent;
+}
+
+.tb-btn--danger:hover:not(:disabled) {
+    background: var(--danger-dim);
+    border-color: var(--danger);
+    color: #ffb3ad;
+}
+
+.tb-btn--icon {
+    position: relative;
+    width: 30px;
+    padding: 0;
+    justify-content: center;
+}
+
+.tb-btn--icon ui-icon {
+    font-size: 15px;
+}
+
+/* GPU-acceleration state, on the Settings button itself - the setting is
+   launch-time only, so it's worth surfacing without opening the menu. */
+.tb-gpu-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--status-online);
+    box-shadow: 0 0 0 2px var(--surface-raised);
+    pointer-events: none;
+}
+
+.tb-gpu-dot--off {
+    background: var(--status-idle);
+}
+
+.tb-selection {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 30px;
+    padding: 0 4px 0 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
     white-space: nowrap;
 }
 
-.toolbar__columns-label {
-    display: flex;
+.tb-selection__clear {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    color: #b3b3b3;
-}
-
-/* ntv-input's own native field is width:100% of this wrapper, so
-   constraining the wrapper is what actually narrows it - only applies to
-   the Columns field (the only ntv-input inside .toolbar__columns-label). */
-.toolbar__columns-label ntv-input {
-    width: 64px;
-}
-
-/* Per Page's own "Custom…" field - same width-via-wrapper trick as
-   Columns above, just not nested inside .toolbar__columns-label since it
-   replaces the Per Page button itself rather than sitting inside its label. */
-.toolbar-custom-pagesize-input {
-    width: 64px;
-}
-
-/* ntv-popover's own panel defaults to a white background with dark text
-   (Component Pantry's light-theme default) - our menu content below assumes
-   a dark panel to match this app's theme, so override the panel itself
-   rather than fight it with light-on-white text. */
-ntv-popover .ntv-popover {
-    background-color: #2a2b2f !important;
-    border-color: #3a3b40 !important;
-}
-
-ntv-popover .ntv-popover__content {
-    color: #e6e6e6 !important;
-}
-
-/* Component Pantry's "danger" button variant is a transparent outline by
-   default (its solid fill only appears on focus/active) - on our dark
-   toolbar/card-header backgrounds it reads as low-contrast dark-red text
-   with no real button surface. Give the Remove buttons a solid fill instead. */
-.btn--danger {
-    background-color: #e73535 !important;
-    border-color: #e73535 !important;
-    color: #fff !important;
-}
-
-.btn--danger:hover:not(:disabled):not(.btn--disabled) {
-    background-color: #c92c2c !important;
-    border-color: #c92c2c !important;
-    color: #fff !important;
-}
-
-.toolbar-menu {
-    display: flex;
-    flex-direction: column;
-    padding: 4px;
-    min-width: 180px;
-}
-
-.toolbar-menu__item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 8px;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    font-size: 11px;
+    color: inherit;
     background: none;
     border: none;
     border-radius: 4px;
-    color: #e6e6e6;
-    font-size: 12px;
-    text-align: left;
     cursor: pointer;
+    opacity: 0.7;
 }
 
-.toolbar-menu__item:hover {
-    background: #3a3b40;
+.tb-selection__clear:hover {
+    background: rgba(255, 255, 255, 0.1);
+    opacity: 1;
 }
 
-.toolbar-menu__badge {
-    background: rgba(242, 73, 92, 0.2);
-    color: #f2495c;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 1px 6px;
-    border-radius: 999px;
-    line-height: 1.5;
+/* Inline field behind the Layout menu's Columns/Per page "Custom…" items - a
+   native menu item can't host a text field, so it lands here instead. Safe
+   from the usual WebContentsView stacking problem: the toolbar sits above
+   grid-mount, where every player is bounded, so nothing can draw over it. */
+.tb-input {
+    width: 84px;
+    height: 30px;
+    padding: 0 8px;
+    font-family: inherit;
+    font-size: 12.5px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    outline: none;
 }
 
-.toolbar-pagination {
+.tb-pager {
     display: flex;
     align-items: center;
     gap: 2px;
 }
 
-.toolbar-page-btn {
-    width: 26px;
-    height: 26px;
+.tb-pager__btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
-    border: 1px solid #3a3b40;
+    width: 26px;
+    height: 26px;
+    font-size: 13px;
+    color: var(--text-muted);
     background: none;
-    color: #b3b3b3;
-    font-size: 11px;
+    border: 1px solid transparent;
+    border-radius: 4px;
     cursor: pointer;
 }
 
-.toolbar-page-btn:hover:not(:disabled) {
-    background: #2a2b2f;
-    color: #e6e6e6;
+.tb-pager__btn:hover:not(:disabled) {
+    background: var(--surface-hover);
+    color: var(--text);
 }
 
-.toolbar-page-btn:disabled {
-    opacity: 0.35;
+.tb-pager__btn:disabled {
+    opacity: 0.3;
     cursor: default;
 }
 
-.toolbar-settings-trigger {
-    position: relative;
-    display: flex;
+.tb-pager__label {
+    font-size: 11.5px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    padding: 0 4px;
+    white-space: nowrap;
 }
 
-.toolbar-gear-dot {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #2fd97b;
-    border: 2px solid #2a2b2f;
-    pointer-events: none;
-}
-
-.toolbar-gear-dot--off {
-    background: #5c6178;
-}
-
+/* ==========================================================================
+   Grid mount
+   ========================================================================== */
 .grid-mount {
     position: relative;
     flex: 1 1 auto;
     min-height: 0;
-    padding: 8px;
+    padding: var(--gap);
 }
 
 .grid-mount--drag-active {
-    outline: 2px dashed #6c8cff;
+    outline: 2px dashed var(--accent);
     outline-offset: -8px;
 }
 
@@ -230,10 +430,11 @@ ntv-popover .ntv-popover__content {
     justify-content: center;
     text-align: center;
     padding: 24px;
-    background: rgba(30, 31, 34, 0.85);
-    color: #e6e6e6;
+    background: rgba(15, 17, 21, 0.9);
+    color: var(--text);
     font-size: 14px;
-    border-radius: 4px;
+    border: 1px dashed var(--accent);
+    border-radius: var(--radius);
     pointer-events: none;
     z-index: 10;
 }
@@ -256,20 +457,68 @@ player-card {
 
 .player-grid {
     display: grid;
-    gap: 8px;
+    gap: var(--gap);
     width: 100%;
     height: 100%;
 }
 
-/* Focused-player layout: one large area + a vertical strip of live
+/* --------------------------------------------------------------------------
+   Empty state — only ever rendered when zero players exist, so there is no
+   WebContentsView anywhere that could paint over it.
+   -------------------------------------------------------------------------- */
+.grid-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 6px;
+    padding: 32px;
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+}
+
+.grid-empty__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    margin-bottom: 8px;
+    font-size: 26px;
+    color: var(--text-dim);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+}
+
+.grid-empty__title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.grid-empty__text {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    max-width: 44ch;
+}
+
+/* --------------------------------------------------------------------------
+   Focused-player layout: one large area + a vertical strip of live
    thumbnails on the right for everyone else, so other players stay visibly
-   running instead of disappearing while one is maximized. */
+   running instead of disappearing while one is maximized.
+   -------------------------------------------------------------------------- */
 .player-focus-layout {
     display: flex;
     flex-direction: row;
     width: 100%;
     height: 100%;
-    gap: 8px;
+    gap: var(--gap);
 }
 
 .player-focus-main {
@@ -287,120 +536,219 @@ player-card {
 .player-focus-strip {
     display: flex;
     flex-direction: column;
-    flex: 0 0 220px;
-    gap: 8px;
+    flex: 0 0 216px;
+    gap: var(--gap);
     overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 2px;
 }
 
 .player-focus-strip player-card {
-    flex: 0 0 140px;
+    flex: 0 0 132px;
     width: 100%;
 }
 
+/* ==========================================================================
+   Player card
+   ========================================================================== */
 .player-card {
-    /* Lets .player-card__header's own rules below react to THIS card's own
-       rendered width via @container, independent of how many columns/pages
-       produced that width - one query instead of separately tracking
-       column count, page size, and the focused-strip's own fixed width in
-       JS. Named (not anonymous) so a future nested container elsewhere in
-       the app can't accidentally get matched by these rules instead. */
-    container-name: player-card;
-    container-type: inline-size;
     position: relative;
     display: flex;
     flex-direction: column;
-    background: #000;
-    border: 1px solid #3a3b40;
-    border-radius: 4px;
+    background: #05070a;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     overflow: hidden;
     width: 100%;
     height: 100%;
     min-width: 0;
     min-height: 0;
-    transition: border-color 0.15s ease;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
 }
 
 .player-card:hover {
-    border-color: #5c8df6;
+    border-color: var(--border-strong);
 }
 
-/* Thumbnail strip's hover uses green instead of the maximized card's blue,
-   so hovering a candidate-to-switch-to reads differently from "this is the
-   currently maximized one". */
-.player-focus-strip .player-card:hover {
-    border-color: #22c55e;
+.player-card--selected {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent-dim);
 }
 
 .player-card--focused {
-    border-color: #6c8cff;
+    border-color: var(--border-strong);
 }
 
+.player-card--errored {
+    border-color: #5a2b28;
+}
+
+/* --------------------------------------------------------------------------
+   Header. Its height is fixed per density tier so the grid's vertical rhythm
+   stays even across cards, and so a tier change is a single discrete step
+   for the WebContentsView below it rather than a continuous reflow.
+   -------------------------------------------------------------------------- */
 .player-card__header {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 6px;
-    background: #2a2b2f;
     flex: 0 0 auto;
+    height: 32px;
+    padding: 0 6px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    user-select: none;
 }
 
-.player-card__actions {
-    display: flex;
-    align-items: center;
+.player-card--lg .player-card__header {
+    height: 34px;
+    padding: 0 8px;
+    gap: 8px;
+}
+
+.player-card--md .player-card__header {
+    height: 30px;
+}
+
+.player-card--sm .player-card__header {
+    height: 26px;
     gap: 4px;
-    flex: 0 0 auto;
+    padding: 0 5px;
 }
 
-.player-card__title {
+.player-card--xs .player-card__header {
+    height: 22px;
+    gap: 3px;
+    padding: 0 4px;
+}
+
+.player-card__lead {
     display: flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
-    flex: 0 1 auto;
-    max-width: 140px;
-}
-
-.player-card__label {
-    font-size: 12px;
-    color: #b3b3b3;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-}
-
-.player-card__label-input {
     flex: 1 1 auto;
-    min-width: 0;
-    font-size: 12px;
-    background: #1e1f22;
-    border: 1px solid #4f7bff;
-    border-radius: 3px;
-    color: #e6e6e6;
-    padding: 2px 4px;
 }
 
-.player-card__loading-dot {
+.player-card--lg .player-card__lead,
+.player-card--md .player-card__lead {
+    flex: 0 1 auto;
+    max-width: 190px;
+}
+
+.player-card--sm .player-card__lead,
+.player-card--xs .player-card__lead {
+    gap: 4px;
+}
+
+.player-card__lead ntv-checkbox {
+    display: flex;
+    align-items: center;
     flex: 0 0 auto;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #4f7bff;
-    animation: player-card-loading-pulse 1s ease-in-out infinite;
 }
 
-@keyframes player-card-loading-pulse {
+.player-card--sm .player-card__lead ntv-checkbox {
+    transform: scale(0.86);
+}
+
+.player-card--xs .player-card__lead ntv-checkbox {
+    transform: scale(0.74);
+}
+
+/* --------------------------------------------------------------------------
+   Status pip — the one piece of chrome that survives every density tier, so
+   a wall of thumbnails is still readable at a glance. Its title carries the
+   full status text, the error message, and CPU/RAM.
+   -------------------------------------------------------------------------- */
+.player-card__status {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    background: var(--status-idle);
+}
+
+.player-card__status--online {
+    background: var(--status-online);
+    box-shadow: 0 0 0 2px rgba(53, 199, 127, 0.16);
+}
+
+.player-card__status--loading {
+    background: var(--status-loading);
+    animation: status-pulse 1.1s ease-in-out infinite;
+}
+
+.player-card__status--recovering {
+    background: var(--status-recovering);
+    animation: status-pulse 1.1s ease-in-out infinite;
+}
+
+.player-card__status--error {
+    background: var(--status-error);
+    box-shadow: 0 0 0 2px rgba(240, 87, 78, 0.18);
+}
+
+@keyframes status-pulse {
     0%,
     100% {
-        opacity: 0.3;
+        opacity: 0.35;
     }
     50% {
         opacity: 1;
     }
 }
 
-/* Compact per-player nav bar (Back/Forward/Reload/Stop/Mute/DevTools + editable URL) - nested inline inside .player-card__header rather than its own row, so it absorbs the header's remaining width. */
-.player-card__navbar {
+.player-card__label,
+.player-card__id {
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    cursor: default;
+}
+
+.player-card--lg .player-card__label {
+    font-size: 12.5px;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.player-card--sm .player-card__label {
+    font-size: 11px;
+}
+
+/* At `xs` the identity is a short stable handle, not a hostname - see
+   PlayerCardComponent.shortId(). Monospace so the ids line up column-wise
+   down a dense grid. */
+.player-card__id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+.player-card__label-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    font-family: inherit;
+    font-size: 11.5px;
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 2px 5px;
+    outline: none;
+}
+
+/* --------------------------------------------------------------------------
+   Nav cluster (md/lg only) — back/forward, reload/stop, URL field.
+   -------------------------------------------------------------------------- */
+.player-card__nav {
     display: flex;
     align-items: center;
     gap: 2px;
@@ -408,172 +756,294 @@ player-card {
     min-width: 0;
 }
 
-.player-card__nav-btn {
+.player-card__url {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    height: 22px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    padding: 0 7px;
+    outline: none;
+    transition:
+        border-color 0.12s ease,
+        color 0.12s ease;
+}
+
+.player-card__url:hover {
+    color: var(--text);
+}
+
+.player-card__url:focus {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.player-card--md .player-card__url {
+    height: 20px;
+    font-size: 10.5px;
+}
+
+.player-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 1px;
     flex: 0 0 auto;
+}
+
+/* --------------------------------------------------------------------------
+   Header buttons. One rule, scaled per tier — the density tiers change WHICH
+   buttons exist (see the component template); this only changes their size.
+   -------------------------------------------------------------------------- */
+.player-card__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 13px;
+    color: var(--text-dim);
     background: transparent;
     border: none;
-    color: #b3b3b3;
-    font-size: 11px;
-    line-height: 1;
-    padding: 3px 5px;
-    border-radius: 3px;
+    border-radius: 4px;
     cursor: pointer;
+    transition:
+        background-color 0.12s ease,
+        color 0.12s ease;
 }
 
-.player-card__nav-btn:hover:not(:disabled) {
-    background: #3a3b40;
-    color: #e6e6e6;
+.player-card__btn:hover:not(:disabled) {
+    background: var(--surface-hover);
+    color: var(--text);
 }
 
-.player-card__nav-btn:disabled {
-    opacity: 0.35;
+.player-card__btn:disabled {
+    opacity: 0.28;
     cursor: default;
 }
 
-.player-card__url-input {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-size: 11px;
-    background: #1e1f22;
-    border: 1px solid #3a3b40;
-    border-radius: 3px;
-    color: #e6e6e6;
-    padding: 3px 6px;
+.player-card__btn--active {
+    color: var(--status-recovering);
 }
 
-/* Shrinks the header's own buttons (Maximize/Remove + the nav bar's
-   Back/Forward/Reload/Mute/DevTools icons) as a card's OWN rendered width
-   drops - i.e. as Columns/Per page pack more instances onto the screen.
-   Same controls throughout, just smaller - no menu/overflow button added.
-   .btn--xs here is ntv-button's own internal class (Maximize/Remove render
-   size="xs") - overridable directly since that library ships with
-   ViewEncapsulation.None (confirmed via its compiled bundle), so these are
-   plain global classes, not shadow-scoped. `.player-card__actions .btn--xs`
-   beats the library's own single-class `.btn--xs` rule on specificity
-   alone (2 classes > 1), no !important needed. */
-@container player-card (max-width: 200px) {
-    .player-card__header {
-        padding: 2px 4px;
-        gap: 4px;
-    }
-
-    .player-card__actions {
-        gap: 2px;
-    }
-
-    .player-card__actions .btn--xs {
-        height: 20px;
-        padding: 2px 4px;
-        font-size: 12px;
-    }
-
-    .player-card__nav-btn {
-        font-size: 10px;
-        padding: 2px 4px;
-    }
+.player-card__btn--danger:hover:not(:disabled) {
+    background: var(--danger-dim);
+    color: #ff9b94;
 }
 
-@container player-card (max-width: 120px) {
-    .player-card__header {
-        padding: 1px 3px;
-        gap: 2px;
-    }
+.player-card--md .player-card__btn {
+    width: 22px;
+    height: 22px;
+    font-size: 12.5px;
+}
 
-    .player-card__actions {
-        gap: 1px;
-    }
+.player-card--sm .player-card__btn {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+}
 
-    .player-card__actions .btn--xs {
-        height: 16px;
-        padding: 0 3px;
-        font-size: 10px;
-    }
+.player-card--xs .player-card__btn {
+    width: 18px;
+    height: 18px;
+    font-size: 12px;
+}
 
-    .player-card__nav-btn {
-        font-size: 9px;
-        padding: 1px 2px;
+/* Indeterminate load bar along the header's bottom edge. Deliberately inside
+   the header, not over the body: the body's rect is the WebContentsView's
+   bounds, and anything drawn there would be painted over by the player. */
+.player-card__progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.player-card__progress::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 35%;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: progress-sweep 1.2s ease-in-out infinite;
+}
+
+@keyframes progress-sweep {
+    0% {
+        left: -35%;
+    }
+    100% {
+        left: 100%;
     }
 }
 
-.player-card__url-input:focus {
-    border-color: #4f7bff;
-    outline: none;
-}
-
+/* --------------------------------------------------------------------------
+   Error card. Drawn where the player normally sits — readable only because
+   PlayerManager.setPlayerError() collapses that player's own view to zero
+   bounds first (see its comment); this is not a z-index win.
+   -------------------------------------------------------------------------- */
 .player-card__error {
     position: absolute;
-    inset: 0;
+    top: 32px;
+    right: 0;
+    bottom: 0;
+    left: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     padding: 16px;
     text-align: center;
-    background: #1a1b1e;
-    color: #e6e6e6;
+    background: #101216;
+    color: var(--text);
     z-index: 5;
 }
 
-.player-card__error p {
-    margin: 0;
-    font-size: 12px;
-    color: #f0a0a0;
-    max-width: 90%;
+.player-card__error-icon {
+    display: flex;
+    font-size: 22px;
+    color: var(--status-error);
 }
 
+.player-card__error-text {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #f2a8a3;
+    max-width: 36ch;
+}
+
+.player-card__error-hint {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.player-card__error-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    height: 26px;
+    padding: 0 12px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    background: var(--surface-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.player-card__error-btn ui-icon {
+    font-size: 13px;
+}
+
+.player-card__error-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent);
+}
+
+/* A very small card has no room for the full error block - the red status
+   pip and the card border already say "this one is broken". */
+.player-card--xs .player-card__error-text,
+.player-card--xs .player-card__error-btn,
+.player-card--xs .player-card__error-hint {
+    display: none;
+}
+
+.player-card--xs .player-card__error {
+    top: 22px;
+}
+
+.player-card--sm .player-card__error {
+    top: 26px;
+}
+
+.player-card--md .player-card__error {
+    top: 30px;
+}
+
+.player-card--lg .player-card__error {
+    top: 34px;
+}
+
+/* --------------------------------------------------------------------------
+   Footer (md/lg only) — identity + resource usage.
+   -------------------------------------------------------------------------- */
 .player-card__footer {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
-    padding: 1px 6px;
-    font-size: 10px;
-    color: #7a7b80;
-    background: #202124;
-    border-top: 1px solid #3a3b40;
+    gap: 8px;
+    min-height: 20px;
+    padding: 4px 8px;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
     overflow: hidden;
 }
 
 .player-card__meta {
     display: flex;
-    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 3px 8px;
+    flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
 }
 
-.player-card__meta span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.player-card__meta-value {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    user-select: text;
 }
 
-.player-card__meta span:not(:last-child)::after {
-    content: '·';
-    margin-left: 6px;
-    color: #4a4b50;
+.player-card__meta-value--license {
+    color: var(--text);
+    font-family: var(--font-mono);
 }
 
 .player-card__metrics {
+    display: flex;
+    gap: 8px;
     flex: 0 0 auto;
     white-space: nowrap;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
 }
 
+/* The one element whose rect becomes a WebContentsView's bounds. It stays
+   empty by design - the real content is a native layer the main process
+   positions over exactly this rectangle. */
 .player-card__body {
     position: relative;
     flex: 1 1 auto;
     min-height: 0;
-    /* The real content here is a WebContentsView layered on top by the main process. */
 }
 
+/* ==========================================================================
+   Add Player modal (Component Pantry's ntv-modal renders light)
+   ========================================================================== */
 ntv-input input,
-ntv-input textarea {
+ntv-input textarea,
+ntv-textarea textarea {
     font-weight: normal !important;
 }
 
-/* ntv-modal's own body/header/footer render with a white background — override the
-   app's global light-on-dark text color so projected content stays readable. */
 .modal-header__title {
     margin: 0 0 4px;
     font-size: 18px;
@@ -590,6 +1060,86 @@ ntv-input textarea {
     border-top: 1px solid #ececee;
 }
 
+/* --------------------------------------------------------------------------
+   Modal buttons — Component Pantry's ntv-button, brought onto the same system
+   as the toolbar.
+
+   The library's stock variants pull in two colours this app no longer uses
+   anywhere else: `primary` paints bg-gradient-sunset (the crimson->orange
+   brand gradient) and `secondary` turns accent-main crimson on hover / navy on
+   active. Left alone, the modal would be the only crimson surface in an
+   otherwise amber-and-neutral UI, and its confirm button wouldn't match the
+   Add player button that opened it.
+
+   Overriding rather than abandoning ntv-button keeps everything else the
+   library gives these buttons — sizing, loading spinner, fullWidth, disabled
+   handling, focus rings, the content wrapper. Only colour is restated.
+
+   On the selectors: ntv-button is compiled with Angular's DEFAULT (emulated)
+   encapsulation, not ViewEncapsulation.None, so the library's own rules ship
+   as `.btn--primary[_ngcontent-xyz]` — specificity (0,2,0), which quietly
+   beats a plain `ntv-modal .btn--primary` (0,1,1) and makes the override look
+   like it simply did nothing. Matching the always-present base class as well
+   (`.btn.btn--primary`, plus the `ntv-modal` ancestor) gets to (0,2,1) and
+   wins on specificity alone — no !important, which matters because the
+   library's own disabled rule is (0,3,0) and must keep overriding all of this
+   so disabled buttons still render grey.
+
+   These are the same amber/gray theme tokens the toolbar's own primary button
+   uses — see .tb-btn--primary for why the values are addressed as tokens and
+   why the text is gray-900 rather than white. */
+
+/* Confirm actions: Add / Add Instance / Build & Add, and the selected mode toggle. */
+ntv-modal .btn.btn--primary,
+ntv-modal .btn.btn--info {
+    @apply bg-amber-500 text-gray-900;
+    background-image: none;
+}
+
+ntv-modal .btn.btn--primary:hover:not(:disabled):not(.btn--disabled),
+ntv-modal .btn.btn--info:hover:not(:disabled):not(.btn--disabled) {
+    @apply bg-amber-600 text-gray-900;
+    background-image: none;
+}
+
+/* The library reveals its navy gradient-fallback on :active by dropping the
+   background image; ours is already flat, so this just deepens one step. */
+ntv-modal .btn.btn--primary:active:not(:disabled):not(.btn--disabled),
+ntv-modal .btn.btn--primary.btn--active,
+ntv-modal .btn.btn--info:active:not(:disabled):not(.btn--disabled) {
+    @apply bg-amber-700 text-gray-900;
+    background-image: none;
+}
+
+ntv-modal .btn.btn--primary:focus,
+ntv-modal .btn.btn--info:focus {
+    @apply ring-amber-500;
+}
+
+/* Dismiss/browse actions: Cancel, Close, Browse .zip, unselected mode toggles.
+   Neutral outline so the only coloured button in the modal is the one that
+   commits — the crimson hover the library ships would otherwise read as a
+   destructive warning on a plain Cancel. */
+ntv-modal .btn.btn--secondary {
+    @apply bg-white text-gray-700;
+    border-color: theme('colors.gray.300');
+}
+
+ntv-modal .btn.btn--secondary:hover:not(:disabled):not(.btn--disabled) {
+    @apply bg-gray-50 text-gray-900;
+    border-color: theme('colors.gray.400');
+}
+
+ntv-modal .btn.btn--secondary:active:not(:disabled):not(.btn--disabled),
+ntv-modal .btn.btn--secondary.btn--active {
+    @apply bg-gray-100 text-gray-900;
+    border-color: theme('colors.gray.400');
+}
+
+ntv-modal .btn.btn--secondary:focus {
+    @apply ring-gray-300;
+}
+
 /* Existing URL stays left, New Instance sits at the far right corner,
    Quick Instance lands centered in the space between them. */
 .mode-toggle {
@@ -599,22 +1149,11 @@ ntv-input textarea {
     margin: 4px 0 18px;
 }
 
-/* ntv-input's own label (used via the [label] input) inherits the app's
-   global light-on-dark text color, which is nearly invisible against the
-   modal's white background - same class of fix as .modal-header__title. */
-ntv-input label {
-    color: #1e1f22 !important;
-}
-
-/* Same fix, same reason, for ntv-textarea (used by the License IDs field) -
-   a separate Component Pantry component from ntv-input, so the rule above
-   never covered it. */
+/* ntv-input/ntv-textarea labels inherit the app's global light-on-dark text
+   colour, which is nearly invisible against the modal's white background. */
+ntv-input label,
 ntv-textarea label {
     color: #1e1f22 !important;
-}
-
-ntv-textarea textarea {
-    font-weight: normal !important;
 }
 
 .instance-form {
@@ -658,7 +1197,7 @@ ntv-textarea textarea {
 }
 
 .instance-form__dropzone--active {
-    border-color: #6c8cff;
+    border-color: var(--accent);
     background: #f3f6ff;
 }
 
@@ -666,13 +1205,13 @@ ntv-textarea textarea {
     max-height: 260px;
     overflow-y: auto;
     background: #0d1117;
-    border: 1px solid #3a3b40;
-    border-radius: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
     padding: 8px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.5;
-    color: #e6e6e6;
+    color: var(--text);
 }
 
 .build-log__line {
@@ -701,23 +1240,23 @@ ntv-textarea textarea {
     align-items: center;
     gap: 8px;
     padding: 8px 14px;
-    background: #1f2a44;
-    border: 1px solid #3a4a6b;
+    background: var(--surface-raised);
+    border: 1px solid var(--border-strong);
     border-radius: 999px;
-    color: #cfe0ff;
-    font-size: 13px;
+    color: var(--text);
+    font-size: 12.5px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
     transition: border-color 0.15s ease;
 }
 
 .build-badge:hover {
-    border-color: #6c8cff;
+    border-color: var(--accent);
 }
 
 .build-badge--error {
-    background: #3a1f22;
-    border-color: #6b3a3f;
+    background: var(--danger-dim);
+    border-color: var(--danger);
     color: #ffcfd6;
 }
 
@@ -725,8 +1264,8 @@ ntv-textarea textarea {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    border: 2px solid rgba(207, 224, 255, 0.35);
-    border-top-color: #6c8cff;
+    border: 2px solid rgba(91, 140, 255, 0.25);
+    border-top-color: var(--accent);
     animation: build-badge-spin 0.8s linear infinite;
     flex: 0 0 auto;
 }

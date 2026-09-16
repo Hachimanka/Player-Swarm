@@ -24,6 +24,10 @@ Each player is a `WebContentsView` created and owned entirely by the main proces
 
 ## Session-partition model
 
+Player actions open in a compact, independently positioned Electron popup. See [Compact player menu](PLAYER-MENU.md) for placement, keyboard controls and validation.
+
+Docker-backed players also have an **Open Instance Console** action with Logs, Terminal and Info in an independent Electron window. See [Instance Console](INSTANCE-CONSOLE.md) for usage, mapping, security boundaries and validation commands.
+
 Every player gets a stable UUID at creation and a Chromium session partition of `persist:player-<uuid>`. That's what actually gives each player its own cookies, localStorage, and cache — Chromium persists a `persist:`-prefixed partition to disk under `userData` on its own, independent of anything this app does.
 
 The player list itself (which players existed, their URLs) is persisted too (Phase 3, "Persist layout") — [`src/main/store.ts`](src/main/store.ts) writes it to the same JSON config file [`src/main/settings.ts`](src/main/settings.ts) already used for other app settings, on every add/remove. On the next launch, `PlayerManager.restoreAll()` recreates each player's `WebContentsView` reusing its exact saved id/partition (never a fresh one), so it reattaches the same cookies/localStorage already sitting on disk instead of starting blank.
@@ -49,7 +53,7 @@ Still not built or not fully verified:
 
 - **Per-player "pause" that stops media**, distinct from mute - `INITPROJECT.md` §6 asks for this specifically; muting (`setAudioMuted`) is done, but actually pausing `<video>`/`<audio>` playback would need injecting JS into the guest page (`webContents.executeJavaScript()`), which hasn't been added.
 - **GPU hardware-acceleration toggle** is implemented (`app.disableHardwareAcceleration()`, gated on a persisted setting read before `app.whenReady()`), but toggling it triggers a full app relaunch (`app.relaunch()` + `app.exit()`) - not yet tested end-to-end that the relaunch actually round-trips correctly.
-- **`npm run build` has not been run against any of this session's changes** - only `npm run dev` has been exercised. Production Angular AOT + Tailwind's purge step are unverified risk areas, not a formality to skip.
+- **Release coverage:** the production renderer build and unpacked Windows package have been verified for Instance Console. Installer execution and macOS/Linux packages remain unverified.
 - **Memory numbers below are stale** - measured before the Angular/Tailwind/Component Pantry migration and everything built since. Needs re-measurement at 1/5/10 players per `INITPROJECT.md` §9's acceptance test before trusting the budget in §6.
 - The acceptance test in `INITPROJECT.md` §9 has not been re-run end-to-end since crash recovery (#3) and label-survives-restart (#4) landed.
 

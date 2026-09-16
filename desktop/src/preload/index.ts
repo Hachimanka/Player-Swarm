@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import { CONSOLE_IPC } from '../shared/instanceConsole';
 import {
     IPC,
     type AddPlayerRequest,
@@ -12,6 +13,7 @@ import {
 } from '@shared/types';
 
 const api: PlayerSwarmAPI = {
+    openInstanceConsole: (id) => ipcRenderer.invoke(CONSOLE_IPC.open, id),
     addPlayer: (url, userAgent, env, license, instanceName) =>
         ipcRenderer.invoke(IPC.addPlayer, { url, userAgent, env, license, instanceName } satisfies AddPlayerRequest),
 

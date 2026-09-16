@@ -1,5 +1,18 @@
-import { Component, ElementRef, computed, effect, inject, input, output, viewChild, viewChildren } from '@angular/core';
+import {
+    Component,
+    ElementRef,
+    computed,
+    effect,
+    inject,
+    input,
+    output,
+    signal,
+    viewChild,
+    viewChildren,
+} from '@angular/core';
 import type { CellBounds, Player, PlayerMetrics, PlayerRuntimeState } from '@shared/types';
+import type { PlayerMenuTrigger } from '@shared/playerMenu';
+import { IconComponent } from './icon.component';
 import { PlayerCardComponent } from './player-card.component';
 
 interface GridDimensions {
@@ -7,25 +20,65 @@ interface GridDimensions {
     rows: number;
 }
 
-/** Column/row breakpoints from the product brief. Beyond 12, falls back to a square-ish grid. */
-function computeGridDimensions(count: number): GridDimensions {
-    if (count <= 0) return { columns: 1, rows: 1 };
-    if (count === 1) return { columns: 1, rows: 1 };
-    if (count === 2) return { columns: 2, rows: 1 };
-    if (count <= 4) return { columns: 2, rows: 2 };
-    if (count <= 6) return { columns: 3, rows: 2 };
-    if (count <= 9) return { columns: 3, rows: 3 };
-    if (count <= 12) return { columns: 4, rows: 3 };
+/** Cells close to 16:9 read as "a screen"; the scoring below is a distance from this. */
+const TARGET_ASPECT = 16 / 9;
 
-    const columns = Math.ceil(Math.sqrt(count));
-    return { columns, rows: Math.ceil(count / columns) };
+/** How much a ragged last row costs relative to aspect error - high enough to break ties, low enough that it never picks a badly-shaped cell just to fill a row. */
+const RAGGED_ROW_PENALTY = 0.35;
+
+/**
+ * Picks the column/row split whose resulting cells are closest to
+ * TARGET_ASPECT in the space actually available, rather than the old fixed
+ * count->layout table (1->1x1, 2->2x1, ..., then square-ish above 12). The
+ * table produced badly shaped cells whenever the window's own aspect ratio
+ * disagreed with it - 4 players in a wide window became a 2x2 of very wide,
+ * very short cards, which is exactly the case where header chrome eats the
+ * most vertical space. Scoring in log space makes "twice too wide" and
+ * "twice too tall" cost the same.
+ */
+function computeGridDimensions(count: number, width: number, height: number): GridDimensions {
+    if (count <= 1) return { columns: 1, rows: 1 };
+    if (width <= 0 || height <= 0) {
+        const columns = Math.ceil(Math.sqrt(count));
+        return { columns, rows: Math.ceil(count / columns) };
+    }
+
+    let best: GridDimensions = { columns: 1, rows: count };
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (let columns = 1; columns <= count; columns++) {
+        const rows = Math.ceil(count / columns);
+        const aspect = width / columns / (height / rows);
+        const raggedness = ((columns * rows - count) / count) * RAGGED_ROW_PENALTY;
+        const score = Math.abs(Math.log(aspect / TARGET_ASPECT)) + raggedness;
+        if (score < bestScore) {
+            bestScore = score;
+            best = { columns, rows };
+        }
+    }
+
+    return best;
 }
 
 @Component({
     selector: 'player-grid',
-    imports: [PlayerCardComponent],
+    imports: [IconComponent, PlayerCardComponent],
     template: `
-        @if (focusedPlayer(); as focused) {
+        @if (players().length === 0) {
+            <!--
+                Safe as ordinary DOM: with no players there is no
+                WebContentsView anywhere on screen to be painted over by it.
+            -->
+            <div class="grid-empty">
+                <span class="grid-empty__icon"><ui-icon name="monitor" /></span>
+                <h2 class="grid-empty__title">No players running</h2>
+                <p class="grid-empty__text">
+                    Add a player to point at an existing URL, or build a new N-Compass instance.
+                    <br />
+                    You can also drop a player-server + player-ui .zip pair anywhere here.
+                </p>
+            </div>
+        } @else if (focusedPlayer(); as focused) {
             <div class="player-focus-layout">
                 <div class="player-focus-main">
                     <player-card
@@ -34,6 +87,7 @@ function computeGridDimensions(count: number): GridDimensions {
                         [selected]="selectedIds().has(focused.id)"
                         [runtimeState]="runtimeStates().get(focused.id)"
                         [metrics]="metrics().get(focused.id)"
+                        [renameTargetId]="renameTargetId()"
                         (remove)="remove.emit($event)"
                         (toggleFocus)="onToggleFocus($event)"
                         (toggleSelect)="toggleSelect.emit($event)"
@@ -44,7 +98,9 @@ function computeGridDimensions(count: number): GridDimensions {
                         (stop)="stop.emit($event)"
                         (toggleMute)="toggleMute.emit($event)"
                         (openDevTools)="openDevTools.emit($event)"
-                        (rename)="rename.emit($event)" />
+                        (openMenu)="openMenu.emit($event)"
+                        (rename)="rename.emit($event)"
+                        (renameClosed)="renameClosed.emit($event)" />
                 </div>
                 @if (otherPlayers().length > 0) {
                     <div class="player-focus-strip" #stripEl>
@@ -55,6 +111,7 @@ function computeGridDimensions(count: number): GridDimensions {
                                 [selected]="selectedIds().has(player.id)"
                                 [runtimeState]="runtimeStates().get(player.id)"
                                 [metrics]="metrics().get(player.id)"
+                                [renameTargetId]="renameTargetId()"
                                 (remove)="remove.emit($event)"
                                 (toggleFocus)="onToggleFocus($event)"
                                 (toggleSelect)="toggleSelect.emit($event)"
@@ -65,7 +122,9 @@ function computeGridDimensions(count: number): GridDimensions {
                                 (stop)="stop.emit($event)"
                                 (toggleMute)="toggleMute.emit($event)"
                                 (openDevTools)="openDevTools.emit($event)"
-                                (rename)="rename.emit($event)" />
+                                (openMenu)="openMenu.emit($event)"
+                                (rename)="rename.emit($event)"
+                                (renameClosed)="renameClosed.emit($event)" />
                         }
                     </div>
                 }
@@ -73,8 +132,8 @@ function computeGridDimensions(count: number): GridDimensions {
         } @else {
             <div
                 class="player-grid"
-                [style.grid-template-columns]="'repeat(' + dims().columns + ', 1fr)'"
-                [style.grid-template-rows]="'repeat(' + dims().rows + ', 1fr)'">
+                [style.grid-template-columns]="'repeat(' + dims().columns + ', minmax(0, 1fr))'"
+                [style.grid-template-rows]="'repeat(' + dims().rows + ', minmax(0, 1fr))'">
                 @for (player of pagedPlayers(); track player.id) {
                     <player-card
                         [player]="player"
@@ -82,6 +141,7 @@ function computeGridDimensions(count: number): GridDimensions {
                         [selected]="selectedIds().has(player.id)"
                         [runtimeState]="runtimeStates().get(player.id)"
                         [metrics]="metrics().get(player.id)"
+                        [renameTargetId]="renameTargetId()"
                         (remove)="remove.emit($event)"
                         (toggleFocus)="onToggleFocus($event)"
                         (toggleSelect)="toggleSelect.emit($event)"
@@ -92,7 +152,9 @@ function computeGridDimensions(count: number): GridDimensions {
                         (stop)="stop.emit($event)"
                         (toggleMute)="toggleMute.emit($event)"
                         (openDevTools)="openDevTools.emit($event)"
-                        (rename)="rename.emit($event)" />
+                        (openMenu)="openMenu.emit($event)"
+                        (rename)="rename.emit($event)"
+                        (renameClosed)="renameClosed.emit($event)" />
                 }
             </div>
         }
@@ -107,6 +169,7 @@ export class GridComponent {
     public readonly selectedIds = input<ReadonlySet<string>>(new Set());
     public readonly runtimeStates = input<ReadonlyMap<string, PlayerRuntimeState>>(new Map());
     public readonly metrics = input<ReadonlyMap<string, PlayerMetrics>>(new Map());
+    public readonly renameTargetId = input<string | null>(null);
 
     public readonly remove = output<string>();
     public readonly focusChange = output<string | null>();
@@ -119,12 +182,28 @@ export class GridComponent {
     public readonly toggleMute = output<string>();
     public readonly openDevTools = output<string>();
     public readonly rename = output<{ id: string; label: string }>();
+    public readonly openMenu = output<PlayerMenuTrigger>();
+    public readonly renameClosed = output<string>();
 
     private readonly hostRef = inject(ElementRef<HTMLElement>);
     private readonly cards = viewChildren(PlayerCardComponent);
     private readonly stripEl = viewChild<ElementRef<HTMLElement>>('stripEl');
+    private readonly hostSize = signal<{ width: number; height: number }>({ width: 0, height: 0 });
     private reportScheduled = false;
     private stripScrollCleanup: (() => void) | null = null;
+
+    /**
+     * Watches every card's own body placeholder, not just the grid host. A
+     * card's header can change height on its own - the density tiers in
+     * player-card.component.ts swap toolbars as a card grows or shrinks -
+     * and that moves/resizes the body underneath it without the grid itself
+     * changing size at all. Without this, the WebContentsView would keep the
+     * bounds of the *previous* header height: either a strip of dead player
+     * content left over the header, or a gap below it. It's also what keeps
+     * this file free of any knowledge of the density rules - it reacts to the
+     * measured result instead of being told about the CSS.
+     */
+    private readonly bodyObserver = new ResizeObserver(() => this.scheduleReport());
 
     /** Only the current page's players when pagination (pageSize) is set - unpaginated (null) shows everyone, today's behavior. */
     public readonly pagedPlayers = computed<Player[]>(() => {
@@ -138,7 +217,8 @@ export class GridComponent {
         const override = this.columnOverride();
         const count = this.pagedPlayers().length;
         if (override) return { columns: override, rows: Math.ceil(count / override) };
-        return computeGridDimensions(count);
+        const { width, height } = this.hostSize();
+        return computeGridDimensions(count, width, height);
     });
 
     public readonly focusedPlayer = computed<Player | null>(() => {
@@ -154,7 +234,11 @@ export class GridComponent {
     });
 
     public constructor() {
-        new ResizeObserver(() => this.scheduleReport()).observe(this.hostRef.nativeElement);
+        new ResizeObserver((entries) => {
+            const rect = entries[0]?.contentRect;
+            if (rect) this.hostSize.set({ width: rect.width, height: rect.height });
+            this.scheduleReport();
+        }).observe(this.hostRef.nativeElement);
         window.addEventListener('resize', () => this.scheduleReport());
 
         effect(() => {
@@ -162,6 +246,16 @@ export class GridComponent {
             this.focusedPlayer();
             this.otherPlayers();
             this.pagedPlayers();
+            this.scheduleReport();
+        });
+
+        // Re-point the body observer whenever the set of rendered cards
+        // changes (add/remove, page flip, focus/grid branch switch).
+        effect(() => {
+            this.bodyObserver.disconnect();
+            for (const card of this.cards()) {
+                this.bodyObserver.observe(card.body().nativeElement);
+            }
             this.scheduleReport();
         });
 

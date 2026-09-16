@@ -1,9 +1,10 @@
-import { Component, computed, effect, signal, viewChild } from '@angular/core';
+import { Component, computed, effect, signal, viewChild, type ElementRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Button, Input as PantryInput, Modal, Textarea } from '@ntv360/component-pantry';
 import type {
     BuildProgressEvent,
     Player,
+    PlayerMenuContext,
     PlayerMetrics,
     PlayerRuntimeState,
     ToolbarMenuActionEvent,
@@ -11,103 +12,168 @@ import type {
     ToolbarMenuKind,
 } from '@shared/types';
 import { GridComponent } from './grid.component';
+import type { PlayerMenuTrigger } from '@shared/playerMenu';
+import { IconComponent } from './icon.component';
+import { STATUS_LABEL, playerStatusOf, type PlayerStatus } from './player-card.component';
 
 type ModalMode = 'url' | 'instance' | 'quick';
 
+/** Rollup order for the toolbar's status chips - worst first, so a problem is the first thing read. */
+const STATUS_ORDER: PlayerStatus[] = ['error', 'recovering', 'loading', 'online', 'idle'];
+
 @Component({
     selector: 'app-root',
-    imports: [FormsModule, GridComponent, Button, PantryInput, Modal, Textarea],
+    imports: [FormsModule, GridComponent, IconComponent, Button, PantryInput, Modal, Textarea],
     template: `
-        <div class="toolbar">
+        <header class="toolbar">
             <div class="toolbar__group">
-                <ntv-button variant="primary" (buttonClick)="openModal()">+ Add player</ntv-button>
+                <button type="button" class="tb-btn tb-btn--primary" (click)="openModal()">
+                    <ui-icon name="plus" />
+                    Add player
+                </button>
                 @if (focusedPlayerId()) {
-                    <ntv-button variant="secondary" size="xs" (buttonClick)="focusedPlayerId.set(null)"
-                        >← Back to grid</ntv-button
-                    >
+                    <button type="button" class="tb-btn" (click)="focusedPlayerId.set(null)">
+                        <ui-icon name="layout" />
+                        Back to grid
+                    </button>
                 }
             </div>
 
             @if (players().length > 0) {
                 <div class="toolbar__divider"></div>
-                <div class="toolbar__group">
-                    <ntv-button variant="secondary" size="sm" (buttonClick)="openActionsMenu($event)"
-                        >Actions ▾</ntv-button
-                    >
 
-                    <ntv-button variant="danger" size="sm" (buttonClick)="openRemoveMenu($event)">
-                        🗑 Remove
-                        @if (selectedIds().size > 0) {
-                            <span class="toolbar-menu__badge">{{ selectedIds().size }}</span>
-                        }
-                        ▾
-                    </ntv-button>
+                <!-- Fleet rollup: the one place that answers "is anything wrong right now" without scanning every card. -->
+                <div class="toolbar__stats">
+                    <span class="stat stat--total">
+                        <strong>{{ players().length }}</strong>
+                        {{ players().length === 1 ? 'player' : 'players' }}
+                    </span>
+                    @for (entry of statusSummary(); track entry.status) {
+                        <span class="stat stat--{{ entry.status }}" [title]="entry.count + ' ' + entry.label">
+                            <span class="stat__pip"></span>
+                            {{ entry.count }}
+                            <span class="stat__label">{{ entry.label }}</span>
+                        </span>
+                    }
+                    @if (resourceSummary(); as usage) {
+                        <span class="stat stat--usage" title="Combined CPU and resident memory across all players">
+                            {{ usage.cpu }} · {{ usage.memory }}
+                        </span>
+                    }
                 </div>
             }
 
             <div class="toolbar__spacer"></div>
 
-            <div class="toolbar__group">
-                <label class="toolbar__columns-label">
-                    Columns
-                    <ntv-input
-                        type="number"
-                        size="xs"
-                        placeholder="Auto"
-                        [disabledInput]="focusedPlayerId() !== null"
-                        [(ngModel)]="columnsText"
-                        (ngModelChange)="onColumnsChange($event)" />
-                </label>
+            @if (players().length > 0) {
+                <div class="toolbar__group">
+                    @if (selectedIds().size > 0) {
+                        <span class="tb-selection">
+                            {{ selectedIds().size }} selected
+                            <button
+                                type="button"
+                                class="tb-selection__clear"
+                                title="Clear selection"
+                                (click)="clearSelection()">
+                                <ui-icon name="close" />
+                            </button>
+                        </span>
+                    }
+                    <button type="button" class="tb-btn" (click)="openActionsMenu($event)">
+                        <ui-icon name="bolt" />
+                        Actions
+                        <ui-icon name="down" />
+                    </button>
+                    <button type="button" class="tb-btn tb-btn--danger" (click)="openRemoveMenu($event)">
+                        <ui-icon name="trash" />
+                        Remove
+                        <ui-icon name="down" />
+                    </button>
+                </div>
 
                 <div class="toolbar__divider"></div>
+            }
 
-                <span class="toolbar__columns-label">Per page</span>
-                @if (customPageSizeOpen()) {
-                    <ntv-input
-                        #customPageSizeInput
-                        class="toolbar-custom-pagesize-input"
+            <div class="toolbar__group">
+                <!--
+                    Columns and Per page used to be two separate toolbar
+                    controls (a bare number input and a dropdown button).
+                    They are one native Layout menu with two submenus now -
+                    same two settings, a third of the toolbar width, and no
+                    HTML dropdown that would have to fight a WebContentsView.
+                    Each submenu's "Custom…" still needs a real text field,
+                    which a native menu item cannot host, so it swaps this
+                    button for the matching inline input below.
+                -->
+                @if (customColumnsOpen()) {
+                    <input
+                        #customColumnsInput
+                        class="tb-input"
                         type="number"
-                        size="xs"
+                        min="1"
+                        placeholder="Columns"
+                        [(ngModel)]="customColumnsText"
+                        (keydown.enter)="commitCustomColumns()"
+                        (keydown.escape)="cancelCustomColumns()"
+                        (blur)="commitCustomColumns()" />
+                } @else if (customPageSizeOpen()) {
+                    <input
+                        #customPageSizeInput
+                        class="tb-input"
+                        type="number"
+                        min="1"
                         placeholder="Per page"
-                        [minValue]="1"
                         [(ngModel)]="customPageSizeText"
                         (keydown.enter)="commitCustomPageSize()"
                         (keydown.escape)="cancelCustomPageSize()"
                         (blur)="commitCustomPageSize()" />
                 } @else {
-                    <ntv-button variant="secondary" size="sm" (buttonClick)="openPerPageMenu($event)">
-                        {{ pageSize() ? pageSize() + ' / page' : 'Auto' }} ▾
-                    </ntv-button>
+                    <button
+                        type="button"
+                        class="tb-btn"
+                        [disabled]="focusedPlayerId() !== null"
+                        title="Grid columns and page size"
+                        (click)="openLayoutMenu($event)">
+                        <ui-icon name="layout" />
+                        {{ layoutLabel() }}
+                        <ui-icon name="down" />
+                    </button>
                 }
 
                 @if (pageSize() && totalPages() > 1) {
-                    <div class="toolbar-pagination">
+                    <div class="tb-pager">
                         <button
                             type="button"
-                            class="toolbar-page-btn"
+                            class="tb-pager__btn"
+                            title="Previous page"
                             [disabled]="currentPage() === 0"
                             (click)="prevPage()">
-                            ◀
+                            <ui-icon name="back" />
                         </button>
-                        <span class="toolbar__page-label">Page {{ currentPage() + 1 }} of {{ totalPages() }}</span>
+                        <span class="tb-pager__label">{{ currentPage() + 1 }} / {{ totalPages() }}</span>
                         <button
                             type="button"
-                            class="toolbar-page-btn"
+                            class="tb-pager__btn"
+                            title="Next page"
                             [disabled]="currentPage() >= totalPages() - 1"
                             (click)="nextPage()">
-                            ▶
+                            <ui-icon name="forward" />
                         </button>
                     </div>
                 }
 
                 <div class="toolbar__divider"></div>
 
-                <div class="toolbar-settings-trigger">
-                    <ntv-button variant="secondary" size="sm" (buttonClick)="openSettingsMenu($event)">⚙</ntv-button>
-                    <span class="toolbar-gear-dot" [class.toolbar-gear-dot--off]="gpuDisabled()"></span>
-                </div>
+                <button
+                    type="button"
+                    class="tb-btn tb-btn--icon"
+                    [title]="gpuDisabled() ? 'Settings — GPU acceleration off' : 'Settings — GPU acceleration on'"
+                    (click)="openSettingsMenu($event)">
+                    <ui-icon name="settings" />
+                    <span class="tb-gpu-dot" [class.tb-gpu-dot--off]="gpuDisabled()"></span>
+                </button>
             </div>
-        </div>
+        </header>
 
         <div
             class="grid-mount"
@@ -125,6 +191,7 @@ type ModalMode = 'url' | 'instance' | 'quick';
                 [selectedIds]="selectedIds()"
                 [runtimeStates]="runtimeStates()"
                 [metrics]="metrics()"
+                [renameTargetId]="renameTargetId()"
                 (focusChange)="focusedPlayerId.set($event)"
                 (toggleSelect)="onToggleSelect($event)"
                 (remove)="onRemovePlayer($event)"
@@ -135,6 +202,8 @@ type ModalMode = 'url' | 'instance' | 'quick';
                 (stop)="onStopPlayer($event)"
                 (toggleMute)="onToggleMute($event)"
                 (openDevTools)="onOpenDevTools($event)"
+                (openMenu)="openPlayerMenu($event)"
+                (renameClosed)="onRenameClosed()"
                 (rename)="onRename($event)" />
             @if (dragActive()) {
                 <div class="drop-overlay">
@@ -314,6 +383,14 @@ export class AppComponent {
     public readonly dragActive = signal(false);
     public readonly instanceDragActive = signal(false);
     public readonly customPageSizeOpen = signal(false);
+    public readonly customColumnsOpen = signal(false);
+    /** Which card, if any, the native card menu's "Rename…" asked to put into inline-edit mode. */
+    public readonly renameTargetId = signal<string | null>(null);
+    /**
+     * Cards currently showing the diagnostics panel instead of their player.
+     * GridComponent parks each of these players' guest views offscreen so the
+     * renderer-drawn panel underneath becomes visible - see its reportBounds().
+     */
 
     public readonly serverZipPath = signal<string | null>(null);
     public readonly uiZipPath = signal<string | null>(null);
@@ -336,7 +413,42 @@ export class AppComponent {
 
     public readonly allMuted = computed(() => this.players().length > 0 && this.players().every((p) => p.muted));
 
-    public columnsText = '';
+    /** Non-zero status buckets, worst first - the toolbar's at-a-glance fleet health. */
+    public readonly statusSummary = computed(() => {
+        const counts = new Map<PlayerStatus, number>();
+        for (const player of this.players()) {
+            const status = playerStatusOf(player, this.runtimeStates().get(player.id));
+            counts.set(status, (counts.get(status) ?? 0) + 1);
+        }
+        return STATUS_ORDER.filter((status) => counts.has(status)).map((status) => ({
+            status,
+            label: STATUS_LABEL[status].toLowerCase(),
+            count: counts.get(status) ?? 0,
+        }));
+    });
+
+    /** Combined CPU/memory across every player, or null until the first metrics poll lands. */
+    public readonly resourceSummary = computed(() => {
+        const all = [...this.metrics().values()];
+        if (all.length === 0) return null;
+        const cpu = all.reduce((sum, m) => sum + m.cpuPercent, 0);
+        const memoryMB = all.reduce((sum, m) => sum + m.memoryMB, 0);
+        return {
+            cpu: `${cpu.toFixed(0)}% CPU`,
+            memory: memoryMB >= 1024 ? `${(memoryMB / 1024).toFixed(1)} GB` : `${memoryMB.toFixed(0)} MB`,
+        };
+    });
+
+    /** Summarises the Layout menu's two settings onto its own button, so the current layout is readable without opening it. */
+    public readonly layoutLabel = computed(() => {
+        const parts: string[] = [];
+        const columns = this.columnOverride();
+        if (columns) parts.push(`${columns} ${columns === 1 ? 'column' : 'columns'}`);
+        const size = this.pageSize();
+        if (size) parts.push(`${size}/page`);
+        return parts.length > 0 ? parts.join(' · ') : 'Layout';
+    });
+
     public urlModel = '';
     public envText = '';
     public licenseText = '';
@@ -345,11 +457,14 @@ export class AppComponent {
     public addCountText = '1';
     public userAgentModel = '';
     public customPageSizeText = '';
+    public customColumnsText = '';
 
     private readonly urlInput = viewChild<PantryInput>('urlInput');
-    private readonly customPageSizeInput = viewChild<PantryInput>('customPageSizeInput');
+    private readonly customPageSizeInput = viewChild<ElementRef<HTMLInputElement>>('customPageSizeInput');
+    private readonly customColumnsInput = viewChild<ElementRef<HTMLInputElement>>('customColumnsInput');
     private stopBuildProgress: (() => void) | null = null;
     private closingCustomPageSize = false;
+    private closingCustomColumns = false;
 
     public constructor() {
         window.playerSwarm.onPlayersChanged((players) => this.onPlayersChanged(players));
@@ -374,16 +489,21 @@ export class AppComponent {
         // The Add Player modal is a big, centered, deliberately rare overlay -
         // hiding every player for it is the right call (a WebContentsView
         // always draws above the renderer's own DOM, so there's no CSS way
-        // to make the modal visible over a player otherwise). The toolbar's
-        // Actions/Remove/Settings/Per Page menus avoid that problem entirely
-        // instead of working around it - see showMenu()'s own comment.
+        // to make the modal visible over a player otherwise). It is the only
+        // thing in this app that still needs that treatment. Toolbar menus
+        // are native Electron Menus; player menus use a separate Electron
+        // popup window. Neither needs the player views hidden.
         effect(() => {
             window.playerSwarm.setOverlayVisible(this.modalOpen());
         });
     }
 
     public openActionsMenu(event: MouseEvent): void {
-        this.showMenu('actions', event, { allMuted: this.allMuted() });
+        this.showMenu('actions', event, {
+            allMuted: this.allMuted(),
+            totalCount: this.players().length,
+            selectedCount: this.selectedIds().size,
+        });
     }
 
     public reloadAll(): void {
@@ -395,7 +515,10 @@ export class AppComponent {
     }
 
     public openRemoveMenu(event: MouseEvent): void {
-        this.showMenu('remove', event, { selectedCount: this.selectedIds().size });
+        this.showMenu('remove', event, {
+            selectedCount: this.selectedIds().size,
+            totalCount: this.players().length,
+        });
     }
 
     public openSettingsMenu(event: MouseEvent): void {
@@ -406,18 +529,53 @@ export class AppComponent {
         });
     }
 
-    public onColumnsChange(value: string): void {
-        const parsed = Number.parseInt(value, 10);
-        this.columnOverride.set(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+    public openLayoutMenu(event: MouseEvent): void {
+        this.showMenu('layout', event, { pageSize: this.pageSize(), columns: this.columnOverride() });
     }
 
-    public openPerPageMenu(event: MouseEvent): void {
-        this.showMenu('perPage', event, { pageSize: this.pageSize() });
+    /**
+     * The per-card overflow/context menu. Built here rather than in
+     * PlayerCardComponent because AppComponent is the only component that
+     * talks to window.playerSwarm - the card just reports where it was asked
+     * for, in the same window-content coordinate space showMenu() uses.
+     */
+    public openPlayerMenu(event: PlayerMenuTrigger): void {
+        const player = this.players().find((p) => p.id === event.id);
+        if (!player) return;
+        const state = this.runtimeStates().get(player.id);
+
+        const context: PlayerMenuContext = {
+            id: player.id,
+            name: player.label || player.url || `Player ${player.id.slice(0, 4)}`,
+            url: player.url,
+            muted: player.muted,
+            focused: this.focusedPlayerId() === player.id,
+            selected: this.selectedIds().has(player.id),
+            loading: Boolean(state?.loading),
+            canGoBack: Boolean(state?.canGoBack),
+            canGoForward: Boolean(state?.canGoForward),
+            hasInstance: Boolean(player.instanceName),
+        };
+
+        window.playerSwarm.showToolbarMenu({ kind: 'player', x: event.x, y: event.y, anchor: event.anchor, context: { player: context } });
+    }
+
+    public selectAll(): void {
+        this.selectedIds.set(new Set(this.players().map((p) => p.id)));
+    }
+
+    public clearSelection(): void {
+        this.selectedIds.set(new Set());
+    }
+
+    /** Clears the one-shot rename request so a second "Rename…" on the same card retriggers the card's effect. */
+    public onRenameClosed(): void {
+        this.renameTargetId.set(null);
     }
 
     /**
      * Opens a native Electron menu anchored under the trigger button instead
-     * of an HTML ntv-popover - a WebContentsView always stacks above the
+     * of an HTML dropdown - a WebContentsView always stacks above the
      * renderer's own DOM (see playerManager.ts's header comment), so an HTML
      * dropdown can never actually draw over a player, only force it fully
      * hidden while overlapped (the old black-rectangle bug). A native Menu is
@@ -427,18 +585,23 @@ export class AppComponent {
      * Menu.popup()'s x/y are relative to the window's content area, same as
      * getBoundingClientRect() here (see grid.component.ts's reportBounds()
      * for the same fact established for WebContentsView.setBounds()).
+     *
+     * openPlayerMenu() uses the same request channel, but main routes it to
+     * the separate compact popup window and converts its CSS anchor to screen DIPs.
      */
     private showMenu(kind: ToolbarMenuKind, event: MouseEvent, context: ToolbarMenuContext): void {
         const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
         window.playerSwarm.showToolbarMenu({ kind, x: rect.left, y: rect.bottom, context });
     }
 
-    /** Dispatches a clicked native menu item back to whichever existing method the old HTML popover item used to call directly - see showMenu()'s own comment for why the menu itself is native now. */
+    /** Native toolbar menus and the player popup dispatch through the same existing actions. */
     private onToolbarMenuAction(event: ToolbarMenuActionEvent): void {
         switch (event.kind) {
             case 'actions':
                 if (event.action === 'reloadAll') this.reloadAll();
                 else if (event.action === 'toggleMuteAll') this.toggleMuteAll();
+                else if (event.action === 'selectAll') this.selectAll();
+                else if (event.action === 'clearSelection') this.clearSelection();
                 break;
             case 'remove':
                 if (event.action === 'removeSelected') void this.removeSelected();
@@ -448,13 +611,59 @@ export class AppComponent {
                 if (event.action === 'toggleGpu') this.toggleGpu();
                 else if (event.action === 'chooseDockerRepoPath') void this.chooseDockerRepoPath();
                 break;
-            case 'perPage':
+            case 'layout':
                 if (event.action === 'setPageSize') {
                     this.pageSize.set(event.value ?? null);
                     this.currentPage.set(0); // avoid landing on a now out-of-range page
                 } else if (event.action === 'customPageSize') {
                     this.openCustomPageSizeInput();
+                } else if (event.action === 'setColumns') {
+                    this.columnOverride.set(event.value ?? null);
+                } else if (event.action === 'customColumns') {
+                    this.openCustomColumnsInput();
                 }
+                break;
+            case 'player':
+                if (event.playerId) this.onPlayerMenuAction(event.action, event.playerId);
+                break;
+        }
+    }
+
+    /** Every branch here routes to the same method the card's own inline button would have called - the native menu only ever replaces the button, never the behaviour. */
+    private onPlayerMenuAction(action: string, id: string): void {
+        switch (action) {
+            case 'toggleFocus':
+                this.focusedPlayerId.set(this.focusedPlayerId() === id ? null : id);
+                break;
+            case 'toggleSelect':
+                this.onToggleSelect(id);
+                break;
+            case 'goBack':
+                this.onGoBack(id);
+                break;
+            case 'goForward':
+                this.onGoForward(id);
+                break;
+            case 'reload':
+                this.onReloadPlayer(id);
+                break;
+            case 'stop':
+                this.onStopPlayer(id);
+                break;
+            case 'toggleMute':
+                this.onToggleMute(id);
+                break;
+            case 'openDevTools':
+                this.onOpenDevTools(id);
+                break;
+            case 'openInstanceConsole':
+                void window.playerSwarm.openInstanceConsole(id).catch((error: unknown) => console.error('Could not open Instance Console', error));
+                break;
+            case 'rename':
+                this.renameTargetId.set(id);
+                break;
+            case 'remove':
+                this.onRemovePlayer(id);
                 break;
         }
     }
@@ -467,9 +676,36 @@ export class AppComponent {
      * where players are bounded, so nothing can ever draw over this field).
      */
     private openCustomPageSizeInput(): void {
+        this.customColumnsOpen.set(false); // the two share one toolbar slot
         this.customPageSizeText = this.pageSize() ? String(this.pageSize()) : '';
         this.customPageSizeOpen.set(true);
-        setTimeout(() => this.customPageSizeInput()?.inputElement().nativeElement.focus());
+        setTimeout(() => this.customPageSizeInput()?.nativeElement.focus());
+    }
+
+    /** Columns' own "Custom…", identical in shape to Per page's above - see openCustomPageSizeInput()'s comment. */
+    private openCustomColumnsInput(): void {
+        this.customPageSizeOpen.set(false);
+        this.customColumnsText = this.columnOverride() ? String(this.columnOverride()) : '';
+        this.customColumnsOpen.set(true);
+        setTimeout(() => this.customColumnsInput()?.nativeElement.focus());
+    }
+
+    /** Enter commits, then the resulting blur re-fires this - closingCustomColumns makes that second call a no-op, same guard as commitCustomPageSize(). */
+    public commitCustomColumns(): void {
+        if (this.closingCustomColumns) return;
+        this.closingCustomColumns = true;
+
+        const parsed = Number.parseInt(this.customColumnsText, 10);
+        this.columnOverride.set(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+        this.customColumnsOpen.set(false);
+        setTimeout(() => (this.closingCustomColumns = false));
+    }
+
+    /** Escape discards the typed value instead of applying it - same guard as cancelCustomPageSize(). */
+    public cancelCustomColumns(): void {
+        this.closingCustomColumns = true;
+        this.customColumnsOpen.set(false);
+        setTimeout(() => (this.closingCustomColumns = false));
     }
 
     /** Enter commits, then the resulting blur re-fires this - closingCustomPageSize makes that second call a no-op instead of reapplying (harmlessly) or racing the close. */

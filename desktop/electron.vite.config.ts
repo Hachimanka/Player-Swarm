@@ -20,7 +20,8 @@ export default defineConfig({
         },
         build: {
             rollupOptions: {
-                input: resolve('src/preload/index.ts'),
+                input: { index: resolve('src/preload/index.ts'), console: resolve('src/preload/console.ts'),
+                    'player-menu': resolve('src/preload/player-menu.ts') },
             },
         },
     },
@@ -34,7 +35,8 @@ export default defineConfig({
         },
         build: {
             rollupOptions: {
-                input: resolve('src/renderer/index.html'),
+                input: { index: resolve('src/renderer/index.html'), console: resolve('src/renderer/console.html'),
+                    'player-menu': resolve('src/renderer/player-menu.html') },
             },
         },
     },

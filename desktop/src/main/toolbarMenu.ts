@@ -2,26 +2,51 @@ import { Menu, type BrowserWindow, type MenuItemConstructorOptions } from 'elect
 import { IPC, type ShowToolbarMenuRequest, type ToolbarMenuActionEvent } from '@shared/types';
 
 /**
- * Builds the native Menu template for one of the toolbar's dropdowns -
- * mirrors what app.component.ts's old ntv-popover markup used to render, item
- * for item, but as a real Electron Menu instead of HTML (see
+ * Builds native Menu templates for the toolbar's dropdowns
+ * (Actions/Remove/Layout/Settings). The compact player menu lives in a
+ * separate Electron window in playerContextMenu.ts. Both approaches avoid DOM overlays (see
  * ShowToolbarMenuRequest's own comment for why: a WebContentsView always
  * stacks above the renderer's DOM, so an HTML popover can never draw over a
- * player). Every item just posts {kind, action} back to the renderer rather
- * than performing the action here - the renderer already owns all of this
- * logic (removeSelected(), toggleGpu(), etc.) and stays the single source of
- * truth for it.
+ * player). Every item just posts {kind, action, ...} back to the renderer
+ * rather than performing the action here - the renderer already owns all of
+ * this logic (removeSelected(), toggleGpu(), onReloadPlayer(), etc.) and
+ * stays the single source of truth for it.
+ *
+ * Organising principle, applied to every kind below: destructive items go
+ * last behind a separator, state toggles use real checkbox/radio item types
+ * instead of a label that flips wording, and no action appears in two menus -
+ * the card menu carries the per-player controls its compact header had to
+ * drop, and nothing else.
  */
-/** Per-page presets - Columns stays a plain number input in the toolbar (no fixed preset list makes sense there), so this is the only radio-style option list left. */
+
+/** Per-page presets for the Layout menu's "Per page" submenu. */
 const PAGE_SIZE_OPTIONS: Array<{ label: string; value: number | null }> = [
-    { label: 'Auto (all)', value: null },
-    { label: '1 / page', value: 1 },
-    { label: '2 / page', value: 2 },
-    { label: '4 / page', value: 4 },
-    { label: '6 / page', value: 6 },
-    { label: '9 / page', value: 9 },
-    { label: '12 / page', value: 12 },
-    { label: '20 / page', value: 20 },
+    { label: 'Auto (all on one page)', value: null },
+    { label: '1 per page', value: 1 },
+    { label: '2 per page', value: 2 },
+    { label: '4 per page', value: 4 },
+    { label: '6 per page', value: 6 },
+    { label: '9 per page', value: 9 },
+    { label: '12 per page', value: 12 },
+    { label: '20 per page', value: 20 },
+];
+
+/**
+ * Column presets for the Layout menu's "Columns" submenu - replaces the
+ * toolbar's old free-text number input. "Auto" is the aspect-ratio-aware
+ * layout GridComponent computes from the grid's own measured size; "Custom..."
+ * still reaches a real text field, via the same inline-toolbar-input trick
+ * Per page's own Custom... uses (a native menu item can't host one).
+ */
+const COLUMN_OPTIONS: Array<{ label: string; value: number | null }> = [
+    { label: 'Auto (fit to window)', value: null },
+    { label: '1 column', value: 1 },
+    { label: '2 columns', value: 2 },
+    { label: '3 columns', value: 3 },
+    { label: '4 columns', value: 4 },
+    { label: '5 columns', value: 5 },
+    { label: '6 columns', value: 6 },
+    { label: '8 columns', value: 8 },
 ];
 
 function radioItems(
@@ -39,30 +64,68 @@ function radioItems(
 
 function buildTemplate(win: BrowserWindow, request: ShowToolbarMenuRequest): MenuItemConstructorOptions[] {
     const { kind, context } = request;
-    const emit = (action: string, value?: number | null): void =>
-        win.webContents.send(IPC.toolbarMenuAction, { kind, action, value } satisfies ToolbarMenuActionEvent);
+    const emit = (action: string, value?: number | null, playerId?: string): void =>
+        win.webContents.send(IPC.toolbarMenuAction, {
+            kind,
+            action,
+            value,
+            playerId,
+        } satisfies ToolbarMenuActionEvent);
 
     switch (kind) {
-        case 'actions':
+        case 'actions': {
+            const total = context.totalCount ?? 0;
+            const selected = context.selectedCount ?? 0;
             return [
-                { label: '⟳ Reload all players', click: () => emit('reloadAll') },
+                { label: 'Reload all players', click: () => emit('reloadAll') },
                 {
-                    label: context.allMuted ? '🔊 Unmute all players' : '🔇 Mute all players',
+                    label: 'Mute all players',
+                    type: 'checkbox',
+                    checked: Boolean(context.allMuted),
                     click: () => emit('toggleMuteAll'),
                 },
+                { type: 'separator' },
+                {
+                    label: `Select all (${total})`,
+                    enabled: total > 0 && selected < total,
+                    click: () => emit('selectAll'),
+                },
+                { label: 'Clear selection', enabled: selected > 0, click: () => emit('clearSelection') },
             ];
+        }
 
         case 'remove': {
-            const items: MenuItemConstructorOptions[] = [];
-            if (context.selectedCount) {
-                items.push(
-                    { label: `Remove selected (${context.selectedCount})`, click: () => emit('removeSelected') },
-                    { type: 'separator' },
-                );
-            }
-            items.push({ label: 'Remove all players', click: () => emit('removeAll') });
-            return items;
+            const selected = context.selectedCount ?? 0;
+            return [
+                {
+                    label: `Remove selected (${selected})`,
+                    enabled: selected > 0,
+                    click: () => emit('removeSelected'),
+                },
+                { type: 'separator' },
+                { label: `Remove all players (${context.totalCount ?? 0})`, click: () => emit('removeAll') },
+            ];
         }
+
+        case 'layout':
+            return [
+                {
+                    label: 'Columns',
+                    submenu: [
+                        ...radioItems(COLUMN_OPTIONS, context.columns, (value) => emit('setColumns', value)),
+                        { type: 'separator' },
+                        { label: 'Custom...', click: () => emit('customColumns') },
+                    ],
+                },
+                {
+                    label: 'Per page',
+                    submenu: [
+                        ...radioItems(PAGE_SIZE_OPTIONS, context.pageSize, (value) => emit('setPageSize', value)),
+                        { type: 'separator' },
+                        { label: 'Custom...', click: () => emit('customPageSize') },
+                    ],
+                },
+            ];
 
         case 'settings':
             return [
@@ -74,17 +137,13 @@ function buildTemplate(win: BrowserWindow, request: ShowToolbarMenuRequest): Men
                 },
                 { type: 'separator' },
                 {
-                    label: `Docker repository: ${context.dockerRepoLabel ?? 'Set folder…'}`,
+                    label: `Docker repository: ${context.dockerRepoLabel ?? 'Set folder...'}`,
                     click: () => emit('chooseDockerRepoPath'),
                 },
             ];
 
-        case 'perPage':
-            return [
-                ...radioItems(PAGE_SIZE_OPTIONS, context.pageSize, (value) => emit('setPageSize', value)),
-                { type: 'separator' },
-                { label: 'Custom…', click: () => emit('customPageSize') },
-            ];
+        // Player menus use the compact child window in playerContextMenu.ts.
+        case 'player': return [];
     }
 }
 

@@ -34,6 +34,14 @@ export interface PlayerRuntimeState {
     error: string | null;
     canGoBack: boolean;
     canGoForward: boolean;
+    /**
+     * True while an automatic relaunch is already scheduled for a crashed
+     * player (see PlayerManager.scheduleAutoRelaunch). Distinct from `error`
+     * alone, which also covers the terminal case where the retry budget is
+     * spent and only a manual Reload can recover it - the card surfaces those
+     * as "Recovering" and "Error" respectively.
+     */
+    recovering: boolean;
 }
 
 /** Per-player CPU/memory snapshot from app.getAppMetrics(), keyed by player id. */
@@ -128,18 +136,42 @@ export interface DeleteInstanceResult {
  * draw over a player, only force it fully hidden while overlapped. A native
  * Electron Menu is composited by the OS window manager instead, sitting
  * above WebContentsView with no stacking conflict at all.
+ * The 'player' kind shares this request channel but uses a compact Electron popup window.
  */
-export type ToolbarMenuKind = 'actions' | 'remove' | 'settings' | 'perPage';
+export type ToolbarMenuKind = 'actions' | 'remove' | 'settings' | 'layout' | 'player';
 
 /** Dynamic bits the main process needs to build a toolbar menu's labels/states - mirrors what the old HTML popovers read from renderer state. */
 export interface ToolbarMenuContext {
     selectedCount?: number;
+    /** Total player count - lets the Actions menu label/enable Select all correctly. */
+    totalCount?: number;
     gpuDisabled?: boolean;
     dockerRepoLabel?: string;
-    /** Currently active page size, or null for unpaginated - drives the Per Page menu's radio selection. */
+    /** Currently active page size, or null for unpaginated - drives the Layout menu's Per page radio selection. */
     pageSize?: number | null;
+    /** Currently forced column count, or null for the automatic aspect-aware layout - drives the Layout menu's Columns radio selection. */
+    columns?: number | null;
     /** Whether every player is currently muted - drives the Actions menu's Mute/Unmute all label. */
     allMuted?: boolean;
+    /** The player popup uses its own Electron window above the WebContentsViews. */
+    player?: PlayerMenuContext;
+}
+
+/** Per-player state the compact popup needs to render correct labels/checkmarks. */
+export interface PlayerMenuContext {
+    id: string;
+    /** Full display name; the popup truncates visible text and retains it in the tooltip. */
+    name: string;
+    /** Full URL retained for the compact popup's tooltip and copy action. */
+    url?: string;
+    muted: boolean;
+    focused: boolean;
+    selected: boolean;
+    loading: boolean;
+    canGoBack: boolean;
+    canGoForward: boolean;
+    /** Whether Remove will also offer to tear down a Docker instance - only affects the item's label. */
+    hasInstance: boolean;
 }
 
 /** x/y are relative to the window's content area - same coordinate space as CellBounds/getBoundingClientRect() already used elsewhere in this app. */
@@ -147,6 +179,8 @@ export interface ShowToolbarMenuRequest {
     kind: ToolbarMenuKind;
     x: number;
     y: number;
+    /** Button rectangle in CSS viewport coordinates; omitted for right-clicks. */
+    anchor?: import('./playerMenu').MenuRectangle;
     context: ToolbarMenuContext;
 }
 
@@ -156,10 +190,13 @@ export interface ToolbarMenuActionEvent {
     action: string;
     /** Payload for a radio-style selection (e.g. the chosen column count or page size) - null means "Auto"/unset, undefined means this action carries no value. */
     value?: number | null;
+    /** Set only for kind: 'player' - which card the action applies to. */
+    playerId?: string;
 }
 
 /** Typed surface exposed to the shell renderer via contextBridge. Guest player views get no such bridge. */
 export interface PlayerSwarmAPI {
+    openInstanceConsole(id: string): Promise<void>;
     addPlayer(url?: string, userAgent?: string, env?: string, license?: string, instanceName?: string): Promise<Player>;
     /** Creates `count` players from the same url, staggered ~150ms apart so bulk-add doesn't block the UI thread. */
     addPlayers(count: number, url?: string): Promise<void>;
@@ -204,7 +241,7 @@ export interface PlayerSwarmAPI {
     buildInstance(request: BuildInstanceRequest): Promise<BuildInstanceResult>;
     onBuildProgress(callback: (event: BuildProgressEvent) => void): () => void;
 
-    /** Opens a native OS context menu (Electron Menu.popup()) at the given point instead of an HTML dropdown - see ToolbarMenuKind's own comment for why. */
+    /** Opens the player popup window or a native toolbar menu at the supplied anchor. */
     showToolbarMenu(request: ShowToolbarMenuRequest): void;
     onToolbarMenuAction(callback: (event: ToolbarMenuActionEvent) => void): () => void;
 }

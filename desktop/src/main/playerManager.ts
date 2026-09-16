@@ -113,6 +113,7 @@ export class PlayerManager extends EventEmitter {
             error: null,
             canGoBack: false,
             canGoForward: false,
+            recovering: false,
         });
         this.attachWatchdog(player.id, view);
     }
@@ -190,7 +191,7 @@ export class PlayerManager extends EventEmitter {
 
         const current = this.runtimeState.get(id);
         if (current) {
-            this.runtimeState.set(id, { ...current, error: null });
+            this.runtimeState.set(id, { ...current, error: null, recovering: false });
             this.emitStateChanged();
         }
 
@@ -203,12 +204,27 @@ export class PlayerManager extends EventEmitter {
         }
     }
 
+    /** Flips the runtime `recovering` flag, which the card renders as a distinct status from a plain terminal error. */
+    private patchRecovering(id: string, recovering: boolean): void {
+        const current = this.runtimeState.get(id);
+        if (!current || current.recovering === recovering) return;
+        this.runtimeState.set(id, { ...current, recovering });
+        this.emitStateChanged();
+    }
+
     /** Capped exponential backoff (INITPROJECT.md §3: "cap the retries — never loop infinitely"). */
     private scheduleAutoRelaunch(id: string): void {
         const attempt = this.relaunchAttempts.get(id) ?? 0;
-        if (attempt >= MAX_AUTO_RELAUNCH_ATTEMPTS) return; // stays errored - only a manual Reload can recover it now
+        if (attempt >= MAX_AUTO_RELAUNCH_ATTEMPTS) {
+            // Retry budget spent - stays errored, only a manual Reload can
+            // recover it now. Drop `recovering` so the card stops promising a
+            // retry that will never come and shows plain Error instead.
+            this.patchRecovering(id, false);
+            return;
+        }
 
         this.relaunchAttempts.set(id, attempt + 1);
+        this.patchRecovering(id, true);
         const delayMs = Math.min(AUTO_RELAUNCH_BASE_DELAY_MS * 2 ** attempt, AUTO_RELAUNCH_MAX_DELAY_MS);
 
         const timer = setTimeout(() => {

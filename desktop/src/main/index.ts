@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain as electronIpc, Menu } from 'electron';
 import {
     IPC,
     type AddPlayerRequest,
@@ -14,6 +14,8 @@ import { buildInstance, deleteInstance } from './instanceBuilder';
 import { PlayerManager } from './playerManager';
 import * as settings from './settings';
 import { showToolbarMenu } from './toolbarMenu';
+import { registerInstanceConsole } from './instanceConsole';
+import { PlayerContextMenu } from './playerContextMenu';
 
 // Must run before app.whenReady() - disableHardwareAcceleration() has no
 // effect once Chromium has already finished GPU init (INITPROJECT.md §6:
@@ -84,6 +86,18 @@ async function purgeInstance(win: BrowserWindow, instanceName: string): Promise<
 }
 
 function registerIpcHandlers(win: BrowserWindow, players: PlayerManager): void {
+    // The console has its own restricted bridge. Reject shell IPC from console
+    // windows, guest players and subframes even if they know a channel name.
+    const ipcMain = {
+        handle: (channel: string, listener: Parameters<typeof electronIpc.handle>[1]) => electronIpc.handle(channel, (event, ...args) => {
+            if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw new Error('Unauthorized shell sender.');
+            return listener(event, ...args);
+        }),
+        on: (channel: string, listener: Parameters<typeof electronIpc.on>[1]) => electronIpc.on(channel, (event, ...args) => {
+            if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) return;
+            listener(event, ...args);
+        }),
+    };
     ipcMain.handle(IPC.addPlayer, (_event, request?: AddPlayerRequest) =>
         players.create(request?.url, request?.userAgent, request?.env, request?.license, request?.instanceName),
     );
@@ -242,7 +256,12 @@ function registerIpcHandlers(win: BrowserWindow, players: PlayerManager): void {
         return buildInstance(win, dockerRepoPath, request);
     });
 
-    ipcMain.on(IPC.showToolbarMenu, (_event, request: ShowToolbarMenuRequest) => showToolbarMenu(win, request));
+    const playerMenu = new PlayerContextMenu(win, (id) => players.list().some((player) => player.id === id));
+    players.on('changed', () => playerMenu.validatePlayer());
+    ipcMain.on(IPC.showToolbarMenu, (_event, request: ShowToolbarMenuRequest) => {
+        if (request.kind === 'player') playerMenu.show(request);
+        else { playerMenu.hide(); showToolbarMenu(win, request); }
+    });
 }
 
 app.whenReady().then(() => {
@@ -250,6 +269,7 @@ app.whenReady().then(() => {
     const players = new PlayerManager(win);
     players.restoreAll();
     registerIpcHandlers(win, players);
+    registerInstanceConsole(win, players);
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createShellWindow();
