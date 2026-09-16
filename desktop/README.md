@@ -67,8 +67,11 @@ Measured via summed RSS (`ps`) across every process belonging to the app (main +
 
 ## Development
 
+First-time setup (Node version, private registry, dependency versions, troubleshooting): see [`SETUP.md`](SETUP.md).
+
 ```bash
 npm install
+node node_modules/electron/install.js   # download the Electron binary (after every fresh install)
 npm run dev         # electron-vite dev — hot reload, visible window
 npm run typecheck   # tsc --noEmit against both main/preload and renderer configs
 npm run build        # electron-vite build + electron-builder — packaged app in release/
