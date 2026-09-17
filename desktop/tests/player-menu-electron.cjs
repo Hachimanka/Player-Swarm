@@ -16,6 +16,8 @@ async function run() {
     app.process().stderr.on('data', (chunk) => process.stderr.write(chunk));
     await waitFor(() => app.evaluate(() => Boolean(global.menuQA)));
     const shell = app.windows().find((p) => p.url().includes('QA%20menu') || p.url().includes('QA menu')) || await app.firstWindow();
+    // Let Windows finish applying the fixture's initial non-client bounds before checking anchors.
+    await shell.waitForTimeout(250);
     await shell.evaluate(() => { window.qaActions = []; window.playerSwarm.onToolbarMenuAction((event) => window.qaActions.push(event)); });
     const player = { id: 'qa-player', name: 'A very long player label '.repeat(30),
         url: 'http://localhost:8095/play?operationHours=true&programmatic=true&long=' + 'x'.repeat(1000),
@@ -91,9 +93,9 @@ async function run() {
         await shell.evaluate((request) => window.playerSwarm.showToolbarMenu(request), { kind, x: anchor.x, y: anchor.y + anchor.height, anchor, context });
         await waitFor(async () => (await visible()) && (await popup.evaluate((kind) => document.querySelector('#player-menu').getAttribute('aria-label') === kind, kind[0].toUpperCase() + kind.slice(1))));
     };
-    const pick = async (key) => {
+    const pick = async (key, page = popup) => {
         const before = await shell.evaluate(() => window.qaActions.length);
-        await popup.locator(`[data-action="${key}"]`).click();
+        await page.locator(`[data-action="${key}"]`).click();
         await waitFor(async () => !(await visible()));
         await waitFor(async () => (await shell.evaluate(() => window.qaActions.length)) > before);
         return shell.evaluate(() => window.qaActions.at(-1));
@@ -111,21 +113,106 @@ async function run() {
     await toolbar('remove', { selectedCount: 2, totalCount: 3 });
     assert.deepEqual(await pick('removeSelected'), { kind: 'remove', action: 'removeSelected' });
 
+    const childCount = () => app.evaluate(() => global.menuQA.shell.getChildWindows().filter((w) => w.isVisible()).length);
+    const closeWithKey = async (page, key) => {
+        // A submenu is destroyed on keydown, so Playwright may not be able to send keyup to it.
+        await page.keyboard.press(key).catch((error) => {
+            if (!error.message.includes('Target page, context or browser has been closed')) throw error;
+        });
+        await waitFor(() => page.isClosed());
+    };
+    const submenu = async (parent, action, label, keyboard = false) => {
+        const item = parent.locator(`[data-action="${action}"]`);
+        if (keyboard) { await item.focus(); await parent.keyboard.press('ArrowRight'); }
+        else await item.hover();
+        let page;
+        await waitFor(async () => {
+            for (const candidate of app.windows()) {
+                if (candidate !== parent && !candidate.isClosed() && candidate.url().endsWith('/player-menu.html') &&
+                    await candidate.evaluate((label) => document.querySelector('#player-menu')?.getAttribute('aria-label') === label, label).catch(() => false)) {
+                    page = candidate;
+                    return candidate.evaluate(async () => Boolean(await window.playerMenu.initial())).catch(() => false);
+                }
+            }
+            return false;
+        });
+        await waitFor(async () => (await item.getAttribute('aria-expanded')) === 'true');
+        const parentDepth = await parent.evaluate(async () => (await window.playerMenu.initial()).depth);
+        await waitFor(async () => (await childCount()) === parentDepth + 2);
+        return page;
+    };
     await toolbar('layout', { columns: 3, pageSize: null });
-    assert.deepEqual(await popup.locator('.popup-heading').allInnerTexts(), ['COLUMNS', 'PER PAGE']);
-    assert.equal(await popup.locator('[data-action="setColumns:3"]').getAttribute('aria-checked'), 'true');
-    assert.equal(await popup.locator('[data-action="setPageSize:auto"]').getAttribute('aria-checked'), 'true');
-    assert.equal(await popup.evaluate(() => { const m = document.querySelector('#player-menu'); return m.scrollHeight <= m.clientHeight; }), true);
+    assert.equal(await popup.locator('button').count(), 1);
+    // Windows can enforce a larger transparent native window minimum; the painted menu stays one row.
+    assert.deepEqual(await popup.evaluate(() => { const r = document.querySelector('#player-menu').getBoundingClientRect(); return [r.width, r.height]; }), [132, 26]);
+    let categories = await submenu(popup, 'layout', 'Layout');
+    assert.deepEqual(await categories.locator('.popup-item__text').allInnerTexts(), ['Columns', 'Per page']);
+    let values = await submenu(categories, 'columns', 'Columns');
+    await waitFor(async () => (await childCount()) === 3);
+    assert.equal(await values.locator('[data-action="setColumns:3"]').getAttribute('aria-checked'), 'true');
+    assert.deepEqual(await values.locator('.popup-item__text').allInnerTexts(), ['Auto', '1', '2', '3', '4', '5', '6', '8', 'Custom…']);
     await popup.screenshot({ path: resolve(__dirname, '../release/toolbar-layout-menu-qa.png') });
-    assert.deepEqual(await pick('setColumns:auto'), { kind: 'layout', action: 'setColumns', value: null });
-    await toolbar('layout', { columns: null, pageSize: null });
-    assert.deepEqual(await pick('setPageSize:12'), { kind: 'layout', action: 'setPageSize', value: 12 });
+    await categories.screenshot({ path: resolve(__dirname, '../release/toolbar-layout-categories-qa.png') });
+    await values.screenshot({ path: resolve(__dirname, '../release/toolbar-layout-values-qa.png') });
+    const columnsToken = await values.evaluate(async () => (await window.playerMenu.initial()).token);
+    values = await submenu(categories, 'pageSize', 'Per page');
+    await waitFor(async () => (await childCount()) === 3);
+    assert.equal(await values.locator('[data-action="setPageSize:auto"]').getAttribute('aria-checked'), 'true');
+    assert.equal(await categories.locator('[data-action=columns]').getAttribute('aria-expanded'), 'false');
+    assert.equal(await values.evaluate(() => { const m = document.querySelector('#player-menu'); return m.scrollHeight <= m.clientHeight; }), true);
+    const rejectedLayout = await shell.evaluate(() => window.qaActions.length);
+    await popup.evaluate(async () => window.playerMenu.choose((await window.playerMenu.initial()).token, 'setPageSize:12'));
+    await values.evaluate(() => window.playerMenu.choose(undefined, 'setPageSize:12'));
+    await values.evaluate((token) => window.playerMenu.choose(token, 'setPageSize:12'), columnsToken);
+    assert.equal(await shell.evaluate(() => window.qaActions.length), rejectedLayout);
+    assert.deepEqual(await pick('setPageSize:12', values), { kind: 'layout', action: 'setPageSize', value: 12 });
+
+    // Keyboard enters each level, returns to its owner, and dispatches Custom unchanged.
+    const keyboardCategories = () => submenu(popup, 'layout', 'Layout', true);
     await toolbar('layout', { columns: null, pageSize: 12 });
-    await popup.keyboard.press('End');
-    assert.equal(await popup.evaluate(() => document.activeElement.dataset.action), 'customPageSize');
-    await popup.keyboard.press('Enter');
+    categories = await keyboardCategories();
+    values = await submenu(categories, 'columns', 'Columns', true);
+    await closeWithKey(values, 'ArrowLeft');
+    await waitFor(async () => (await childCount()) === 2);
+    assert.equal(await categories.evaluate(() => document.activeElement.dataset.action), 'columns');
+    values = await submenu(categories, 'pageSize', 'Per page', true);
+    await values.keyboard.press('End');
+    assert.equal(await values.evaluate(() => document.activeElement.dataset.action), 'customPageSize');
+    await closeWithKey(values, 'Enter');
     await waitFor(async () => !(await visible()));
     await waitFor(async () => (await shell.evaluate(() => window.qaActions.at(-1).action)) === 'customPageSize');
+
+    for (const key of ['setColumns:auto', 'customColumns']) {
+        await toolbar('layout', { columns: 7, pageSize: 15 });
+        categories = await keyboardCategories();
+        values = await submenu(categories, 'columns', 'Columns', true);
+        assert.equal(await values.locator('[data-action=customColumns]').getAttribute('aria-checked'), 'true');
+        assert.deepEqual(await pick(key, values), key === 'customColumns'
+            ? { kind: 'layout', action: 'customColumns' } : { kind: 'layout', action: 'setColumns', value: null });
+    }
+    await toolbar('layout', { columns: 3, pageSize: null });
+    categories = await keyboardCategories();
+    values = await submenu(categories, 'columns', 'Columns', true);
+    await closeWithKey(values, 'Escape');
+    await waitFor(async () => !(await visible()));
+    assert.equal(await app.evaluate(() => global.menuQA.shell.getChildWindows().length), 1);
+    // Native focus and lifecycle dismissals close descendants as well as the reusable root.
+    for (const reason of ['resize', 'outside']) {
+        await toolbar('layout', { columns: 3, pageSize: null });
+        categories = await keyboardCategories();
+        values = await submenu(categories, 'columns', 'Columns', true);
+        await app.evaluate((reason) => {
+            if (reason === 'resize') {
+                const [width, height] = global.menuQA.shell.getSize();
+                global.menuQA.shell.setSize(width + 10, height);
+            } else { global.menuQA.shell.focus(); global.menuQA.view.webContents.focus(); }
+        }, reason);
+        await waitFor(async () => !(await visible()));
+        assert.equal(await app.evaluate(() => global.menuQA.shell.getChildWindows().length), 1);
+        // Outside focus retains the existing same-button toggle guard for 300ms.
+        await shell.waitForTimeout(320);
+    }
+    console.log('PASS nested Layout hover, sibling switching, keyboard, selected presets/custom values, scoped tokens and chain cleanup');
 
     await toolbar('settings', { gpuDisabled: false, dockerRepoLabel: 'a-very-long-docker-repository-folder-name-for-qa' });
     assert.equal(await popup.getByRole('menuitemcheckbox', { name: 'GPU acceleration' }).getAttribute('aria-checked'), 'true');
@@ -176,5 +263,11 @@ async function run() {
     console.log('PASS stale/disabled/foreign requests rejected, missing URL, removal and unchanged WebContentsView bounds');
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => {
-    try { if (app) await app.close(); } finally { rmSync(data, { recursive: true, force: true }); }
+    try {
+        if (app) {
+            // Close the fixture's separately owned WebContentsView before quitting Electron.
+            await app.evaluate(() => { if (!global.menuQA.view.webContents.isDestroyed()) global.menuQA.view.webContents.close(); }).catch(() => {});
+            await app.close();
+        }
+    } finally { rmSync(data, { recursive: true, force: true }); }
 });

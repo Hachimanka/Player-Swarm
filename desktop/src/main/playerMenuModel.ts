@@ -3,6 +3,7 @@ import type { MenuRectangle, PlayerMenuItem } from '../shared/playerMenu';
 
 export const PLAYER_MENU_WIDTH = 168;
 export const TOOLBAR_MENU_WIDTH = 184;
+export const LAYOUT_MENU_WIDTH = 132;
 // Row sizes match player-menu.css. Chrome is 3px padding + 1px border on each side.
 const ROW = 18;
 const NAME_ROW = 17;
@@ -55,5 +56,20 @@ export function playerMenuBounds(anchor: MenuRectangle, workArea: MenuRectangle,
     if (y + height > workArea.y + workArea.height - margin) y = anchor.y - height - gap;
     x = Math.max(workArea.x + margin, Math.min(x, workArea.x + workArea.width - margin - width));
     y = Math.max(workArea.y + margin, Math.min(y, workArea.y + workArea.height - margin - height));
+    return { x: Math.round(x), y: Math.round(y), width, height };
+}
+
+/** Submenus align with their parent row, not beneath the toolbar button. */
+export function submenuBounds(row: MenuRectangle, workArea: MenuRectangle,
+    size: { width: number; height: number }, preferLeft = false): MenuRectangle {
+    const margin = 4;
+    const width = Math.min(size.width, Math.max(1, workArea.width - margin * 2));
+    const height = Math.min(size.height, Math.max(1, workArea.height - margin * 2));
+    const right = row.x + row.width;
+    const left = row.x - width;
+    let x = preferLeft ? left : right;
+    if (x < workArea.x + margin || x + width > workArea.x + workArea.width - margin) x = preferLeft ? right : left;
+    x = Math.max(workArea.x + margin, Math.min(x, workArea.x + workArea.width - margin - width));
+    const y = Math.max(workArea.y + margin, Math.min(row.y - 4, workArea.y + workArea.height - margin - height));
     return { x: Math.round(x), y: Math.round(y), width, height };
 }

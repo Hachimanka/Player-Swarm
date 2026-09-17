@@ -5,6 +5,13 @@ declare global { interface Window { playerMenu: PlayerMenuAPI } }
 const menu = document.querySelector<HTMLDivElement>('#player-menu')!;
 let current: PlayerMenuData | null = null;
 
+function openSubmenu(element: HTMLButtonElement, keyboard: boolean) {
+    if (!current) return;
+    const row = element.getBoundingClientRect();
+    window.playerMenu.submenu(current.token, element.dataset.action!,
+        { x: row.x, y: row.y, width: row.width, height: row.height }, keyboard);
+}
+
 const MENU_LABELS: Record<string, string> = { actions: 'Actions', remove: 'Remove', layout: 'Layout', settings: 'Settings' };
 
 function compactUrl(url: string): string {
@@ -30,7 +37,14 @@ function button(label: string, action: string, enabled: boolean, mark = '') {
     const text = document.createElement('span');
     text.className = 'popup-item__text'; text.textContent = label;
     element.append(icon, text);
-    element.addEventListener('click', () => { if (current) window.playerMenu.choose(current.token, action); });
+    element.addEventListener('click', () => {
+        if (!current) return;
+        if (element.hasAttribute('aria-haspopup')) openSubmenu(element, true);
+        else window.playerMenu.choose(current.token, action);
+    });
+    element.addEventListener('pointerenter', () => {
+        if (current?.kind === 'layout' && enabled) openSubmenu(element, false);
+    });
     return element;
 }
 
@@ -47,7 +61,7 @@ function render(data: PlayerMenuData) {
         header.setAttribute('aria-label', data.url ? `Copy player URL: ${data.url}` : data.name);
         menu.append(header);
     } else {
-        menu.setAttribute('aria-label', MENU_LABELS[data.kind] ?? 'Menu');
+        menu.setAttribute('aria-label', data.label ?? MENU_LABELS[data.kind] ?? 'Menu');
     }
     for (const item of data.items) {
         if (item.separatorBefore) {
@@ -67,6 +81,15 @@ function render(data: PlayerMenuData) {
             element.setAttribute('aria-checked', String(item.checked));
         }
         if (item.destructive) element.classList.add('popup-item--danger');
+        if (item.submenu) {
+            element.setAttribute('aria-haspopup', 'menu');
+            element.setAttribute('aria-expanded', 'false');
+            const arrow = document.createElement('span');
+            arrow.className = 'popup-item__arrow';
+            arrow.textContent = '›';
+            arrow.setAttribute('aria-hidden', 'true');
+            element.append(arrow);
+        }
         menu.append(element);
     }
     // Long labels (e.g. a Docker repository folder) are ellipsized; keep the full text in a tooltip.
@@ -85,6 +108,14 @@ document.addEventListener('keydown', (event) => {
     const index = items.indexOf(document.activeElement as HTMLButtonElement);
     let target: number | undefined;
     switch (event.key) {
+        case 'ArrowRight': {
+            const item = items[index];
+            if (item?.hasAttribute('aria-haspopup')) { event.preventDefault(); openSubmenu(item, true); }
+            return;
+        }
+        case 'ArrowLeft':
+            if (current.depth) { event.preventDefault(); window.playerMenu.back(current.token); }
+            return;
         case 'Escape': case 'Tab':
             event.preventDefault(); window.playerMenu.dismiss(current.token); return;
         case 'ArrowDown': target = (index + 1) % items.length; break;
@@ -100,5 +131,15 @@ document.addEventListener('keydown', (event) => {
     if (target !== undefined) { event.preventDefault(); items[target]?.focus(); items[target]?.scrollIntoView({ block: 'nearest' }); }
 });
 document.addEventListener('contextmenu', (event) => event.preventDefault());
+menu.addEventListener('pointerenter', () => { if (current) window.playerMenu.enter(current.token); });
+window.playerMenu.onBranch((action) => {
+    for (const item of menu.querySelectorAll<HTMLButtonElement>('[aria-haspopup]')) {
+        item.setAttribute('aria-expanded', String(item.dataset.action === action));
+    }
+});
+window.playerMenu.onFocus((action) => {
+    const items = enabledItems();
+    (items.find((item) => item.dataset.action === action) ?? items[0])?.focus();
+});
 window.playerMenu.onUpdate(render);
 void window.playerMenu.initial().then((data) => { if (data && (!current || data.token > current.token)) render(data); });

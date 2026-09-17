@@ -19,10 +19,11 @@ export interface PlayerMenuItem {
     radio?: boolean;
     /** Payload sent with the action, e.g. a column count; null means Auto. */
     value?: number | null;
-    /** A non-interactive section label (Layout's Columns/Per page) instead of an action. */
+    /** An optional non-interactive section label instead of an action. */
     heading?: boolean;
     separatorBefore?: boolean;
     destructive?: boolean;
+    submenu?: PlayerMenuItem[];
 }
 
 export interface PlayerMenuData {
@@ -34,6 +35,8 @@ export interface PlayerMenuData {
     width: number;
     height: number;
     items: PlayerMenuItem[];
+    depth?: number;
+    label?: string;
 }
 
 /** The key the popup reports for an item - unique within a menu even when one action has several values. */
@@ -47,5 +50,10 @@ export interface PlayerMenuAPI {
     ready(token: number): void;
     choose(token: number, action: string): void;
     dismiss(token: number): void;
+    submenu(token: number, action: string, row: MenuRectangle, keyboard: boolean): void;
+    enter(token: number): void;
+    back(token: number): void;
+    onBranch(callback: (action: string | null) => void): () => void;
+    onFocus(callback: (action: string | null) => void): () => void;
     onUpdate(callback: (data: PlayerMenuData) => void): () => void;
 }

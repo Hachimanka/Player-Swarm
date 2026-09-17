@@ -12,8 +12,8 @@ import type { PlayerMenuItem } from '../shared/playerMenu';
  *
  * Organising principle, applied to every kind below: destructive items go
  * last behind a separator, state toggles use checkmarks instead of a label
- * that flips wording, and no action appears in two menus. The popup has no
- * submenus, so Layout's Columns and Per page are labelled sections instead.
+ * that flips wording, and no action appears in two menus. Layout uses nested
+ * popups so its presets do not dominate the menu.
  */
 
 /** Per-page presets for the Layout menu's Per page section. */
@@ -50,6 +50,14 @@ function radioItems(action: string, options: Array<{ label: string; value: numbe
         checked: (current ?? null) === opt.value }));
 }
 
+function layoutOptions(action: string, customAction: string, options: Array<{ label: string; value: number | null }>, current: number | null | undefined): PlayerMenuItem[] {
+    return [
+        ...radioItems(action, options, current).map((item) => ({ ...item, label: item.value === null ? 'Auto' : String(item.value) })),
+        { action: customAction, label: 'Custom…', enabled: true, radio: true,
+            checked: current != null && !options.some((option) => option.value === current) },
+    ];
+}
+
 export function toolbarMenuItems(kind: Exclude<ToolbarMenuKind, 'player'>, context: ToolbarMenuContext): PlayerMenuItem[] {
     switch (kind) {
         case 'actions': {
@@ -73,12 +81,12 @@ export function toolbarMenuItems(kind: Exclude<ToolbarMenuKind, 'player'>, conte
 
         case 'layout':
             return [
-                { action: 'heading:columns', label: 'Columns', enabled: false, heading: true },
-                ...radioItems('setColumns', COLUMN_OPTIONS, context.columns),
-                { action: 'customColumns', label: 'Custom…', enabled: true },
-                { action: 'heading:pageSize', label: 'Per page', enabled: false, heading: true, separatorBefore: true },
-                ...radioItems('setPageSize', PAGE_SIZE_OPTIONS, context.pageSize),
-                { action: 'customPageSize', label: 'Custom…', enabled: true },
+                { action: 'layout', label: 'Layout', enabled: true, submenu: [
+                    { action: 'columns', label: 'Columns', enabled: true,
+                        submenu: layoutOptions('setColumns', 'customColumns', COLUMN_OPTIONS, context.columns) },
+                    { action: 'pageSize', label: 'Per page', enabled: true,
+                        submenu: layoutOptions('setPageSize', 'customPageSize', PAGE_SIZE_OPTIONS, context.pageSize) },
+                ] },
             ];
 
         case 'settings':

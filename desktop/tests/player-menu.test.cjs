@@ -86,9 +86,53 @@ test('toolbar menus keep their existing actions, states and values', () => {
         ['toggleGpu', false, 'GPU acceleration'], ['chooseDockerRepoPath', undefined, 'Docker repository: player-swarm-docker']]);
 
     const layout = toolbarMenuItems('layout', { columns: 3, pageSize: null });
-    assert.deepEqual(layout.filter((i) => i.heading).map((i) => i.label), ['Columns', 'Per page']);
-    assert.deepEqual(layout.filter((i) => i.checked).map((i) => menuItemKey(i)), ['setColumns:3', 'setPageSize:auto']);
-    const keys = layout.filter((i) => !i.heading).map(menuItemKey);
+    assert.deepEqual(layout.map((i) => i.label), ['Layout']);
+    const groups = layout[0].submenu;
+    assert.deepEqual(groups.map((i) => i.label), ['Columns', 'Per page']);
+    const leaves = groups.flatMap((i) => i.submenu);
+    assert.deepEqual(leaves.filter((i) => i.checked).map((i) => menuItemKey(i)), ['setColumns:3', 'setPageSize:auto']);
+    const keys = leaves.map(menuItemKey);
     assert.equal(new Set(keys).size, keys.length);
     assert.ok(keys.includes('customColumns') && keys.includes('customPageSize') && keys.includes('setColumns:auto') && keys.includes('setPageSize:20'));
+});
+
+test('Layout preserves every preset, Auto and Custom with only one visible root row', () => {
+    const layout = toolbarMenuItems('layout', { columns: 7, pageSize: 15 });
+    assert.equal(menuHeight(layout, false), 26);
+    const groups = layout[0].submenu;
+    assert.equal(menuHeight(groups, false), 44);
+    assert.deepEqual(groups[0].submenu.slice(0, -1).map((i) => i.value), [null, 1, 2, 3, 4, 5, 6, 8]);
+    assert.deepEqual(groups[1].submenu.slice(0, -1).map((i) => i.value), [null, 1, 2, 4, 6, 9, 12, 20]);
+    for (const group of groups) {
+        assert.equal(menuHeight(group.submenu, false), 170);
+        assert.deepEqual(group.submenu.filter((i) => i.checked).map((i) => i.label), ['Custom…']);
+        assert.equal(group.submenu.at(-1).value, undefined);
+    }
+    for (const [index, property] of [[0, 'columns'], [1, 'pageSize']]) {
+        for (const choice of groups[index].submenu.slice(0, -1)) {
+            const items = toolbarMenuItems('layout', { [property]: choice.value })[0].submenu[index].submenu;
+            assert.deepEqual(items.filter((i) => i.checked).map((i) => i.value), [choice.value]);
+        }
+    }
+});
+
+test('submenus align to rows, flip at screen edges and retain left-opening direction', () => {
+    const { submenuBounds } = mod.exports;
+    const area = { x: 0, y: 0, width: 1000, height: 800 };
+    const size = { width: 132, height: 170 };
+    assert.deepEqual(submenuBounds({ x: 200, y: 104, width: 132, height: 18 }, area, size),
+        { x: 332, y: 100, ...size });
+    assert.deepEqual(submenuBounds({ x: 850, y: 704, width: 132, height: 18 }, area, size),
+        { x: 718, y: 626, ...size });
+    assert.equal(submenuBounds({ x: 718, y: 104, width: 132, height: 18 }, area, size, true).x, 586);
+    for (const workArea of [area, { x: -1200, y: -100, width: 1200, height: 700 }, { x: 10, y: 10, width: 100, height: 100 }]) {
+        for (const x of [workArea.x - 100, workArea.x, workArea.x + workArea.width]) {
+            for (const y of [workArea.y, workArea.y + workArea.height]) {
+                const bounds = submenuBounds({ x, y, width: 132, height: 18 }, workArea, size);
+                assert.ok(bounds.x >= workArea.x + 4 && bounds.y >= workArea.y + 4);
+                assert.ok(bounds.x + bounds.width <= workArea.x + workArea.width - 4);
+                assert.ok(bounds.y + bounds.height <= workArea.y + workArea.height - 4);
+            }
+        }
+    }
 });
